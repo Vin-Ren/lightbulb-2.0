@@ -1,0 +1,4 @@
+requests
+py-cord[voice]
+yt-dlp
+python-dotenv
