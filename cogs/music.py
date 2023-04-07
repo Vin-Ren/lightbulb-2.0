@@ -1,7 +1,5 @@
-# This example requires the 'message_content' privileged intent for prefixed commands.
 
 import asyncio
-import json # for debug
 import yt_dlp
 
 import discord
@@ -27,7 +25,6 @@ ytdl_format_options = {
     ),  # Bind to ipv4 since ipv6 addresses cause issues at certain times
 }
 
-# ffmpeg_options = {"options": "-vn"}
 ffmpeg_options = {
     'options': '-vn',
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
@@ -50,7 +47,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
     
     def create_discord_embed(self, **kwargs):
         embed = discord.Embed(title="Now playing", **kwargs)
-        embed.add_field(name="Title", value=f'{self.data["title"]} [🔗]({self.data["webpage_url"]})', inline=False)
+        embed.add_field(name="Title", value=f'{self.data["title"]} [Link 🔗]({self.data["webpage_url"]})', inline=False)
         embed.add_field(name="Uploader", value=self.data["uploader"], inline=True)
         embed.add_field(name="Duration", value=self.humanized_duration, inline=False)
         embed.set_thumbnail(url=self.data["thumbnail"])
@@ -108,7 +105,6 @@ class Music(commands.Cog):
         embed = player.create_discord_embed(color=ctx.author.color)
         
         await msg.edit(content="", embeds=[embed])
-        # await msg.edit(content=f'>>> Now streaming {player.data["title"]}\n{video_info["webpage_url"]}.\nDuration: {time_formatter(duration)}')
         await asyncio.sleep(player.data["duration"])
         await msg.edit(content="Finished playing.", embeds=[embed])
     

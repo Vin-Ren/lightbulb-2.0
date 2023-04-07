@@ -32,6 +32,7 @@ class Core(commands.Cog):
         embed.add_field(name="Uptime", value=format_duration(round(time.time()-self.start)), inline=False)
         embed.add_field(name="Latency", value=f"{round(self.bot.latency*1000)} ms")
         embed.add_field(name="Prefix", value=f"Prefix [~]", inline=False)
+        embed.add_field(name="Source Code", value="[Github Repo](https://github.com/Vin-Ren/lightbulb-2.0)", inline=False)
         embed.set_thumbnail(url=self.bot.user.avatar.url)
         embed.set_footer(icon_url=ctx.author.avatar.url, text=f"Requested by {ctx.author.name}")
         return embed

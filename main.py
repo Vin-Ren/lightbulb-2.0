@@ -1,6 +1,6 @@
 import os
-import asyncio
 from dotenv import dotenv_values
+
 import discord
 from discord.ext import commands
 from discord import Status, Activity, ActivityType
