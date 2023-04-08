@@ -180,10 +180,7 @@ class Music(commands.Cog):
         if ctx.voice_client is None or ctx.voice_client.is_playing():
             return
         
-        if isinstance(ctx, discord.ApplicationContext):
-            await ctx.followup.send("Automatically disconnected from voice.")
-        else:
-            await ctx.send("Automatically disconnected from voice.")
+        await ctx.send("Automatically disconnected from voice.")
         await ctx.voice_client.disconnect(force=True)
     
     @slash_stream.error
