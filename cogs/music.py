@@ -47,10 +47,11 @@ class YTDLSource(discord.PCMVolumeTransformer):
     
     def create_discord_embed(self, **kwargs):
         embed = discord.Embed(title="Now playing", **kwargs)
-        embed.add_field(name="Title", value=f'{self.data["title"]}\n[🔗 Link]({self.data["webpage_url"]})', inline=False)
-        embed.add_field(name="Uploader", value=self.data["uploader"], inline=True)
-        embed.add_field(name="Duration", value=self.humanized_data['duration'], inline=False)
-        embed.add_field(name="Stats", value=f"Views: {self.humanized_data['views']}\nLikes: {self.humanized_data['likes']}")
+        embed.add_field(name="Title", value=f'{self.data["title"]} [🔗 Link]({self.data["webpage_url"]})')
+        embed.add_field(name="Uploader", value=self.data["uploader"])
+        embed.add_field(name="Duration", value=self.humanized_data['duration'])
+        embed.add_field(name="Views", value=self.humanized_data['views'])
+        embed.add_field(name="Likes", value=self.humanized_data['likes'])
         embed.set_thumbnail(url=self.data["thumbnail"])
         return embed
     
@@ -164,6 +165,7 @@ class Music(commands.Cog):
         if ctx.voice_client is None:
             if ctx.author.voice:
                 await ctx.author.voice.channel.connect()
+                await ctx.guild.change_voice_state(channel=ctx.author.voice.channel, self_mute=False, self_deaf=True)
             else:
                 await ctx.send("You are not connected to a voice channel.")
                 raise commands.CommandError("Author not connected to a voice channel.")
