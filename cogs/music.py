@@ -41,28 +41,46 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
         self.title = data.get("title")
         self.url = data.get("url")
-        self.humanized_duration = "Unknown"
-        if data.get("duration") is not None:
-            self.humanized_duration = self.format_duration(data.get("duration"))
+        self.humanized_data = {'duration': self.format_duration(data.get('duration', -1)), 
+                               'views': self.format_numbers(data.get('view_count', -1)), 
+                               'likes': self.format_numbers(data.get('like_count', -1))}
     
     def create_discord_embed(self, **kwargs):
         embed = discord.Embed(title="Now playing", **kwargs)
-        embed.add_field(name="Title", value=f'{self.data["title"]} [Link 🔗]({self.data["webpage_url"]})', inline=False)
+        embed.add_field(name="Title", value=f'{self.data["title"]}\n[🔗 Link]({self.data["webpage_url"]})', inline=False)
         embed.add_field(name="Uploader", value=self.data["uploader"], inline=True)
-        embed.add_field(name="Duration", value=self.humanized_duration, inline=False)
+        embed.add_field(name="Duration", value=self.humanized_data['duration'], inline=False)
+        embed.add_field(name="Stats", value=f"Views: {self.humanized_data['views']}\nLikes: {self.humanized_data['likes']}")
         embed.set_thumbnail(url=self.data["thumbnail"])
         return embed
     
     @staticmethod
     def format_duration(duration: int):
+        if duration == -1: return 'Unknown'
         duration, seconds = divmod(duration, 60)
         if seconds == 0:
-            return ""
+            return "LIVE"
         duration, minutes = divmod(duration, 60)
         if minutes == 0: return f"{seconds}s"
         duration, hours = divmod(duration, 24)
         if hours == 0: return f"{minutes}m {seconds}s"
         return f"{hours}h {minutes}m {seconds}s"
+    
+    @staticmethod
+    def format_numbers(number: int):
+        if number == -1: return 'Unknown'
+        thousands, ones = divmod(number, 1000)
+        if thousands == 0:
+            return f"{ones}"
+        mils, thousands = divmod(thousands, 1000)
+        if mils == 0:
+            return f"{thousands}K"
+        bils, mils = divmod(mils, 1000)
+        if bils == 0:
+            hundred_thousands, thousands = divmod(thousands, 100)
+            return f"{mils}M" if hundred_thousands == 0 else f"{mils}.{hundred_thousands}M"
+        hundred_mils, mils = divmod(mils, 100)
+        return f"{bils}B" if hundred_mils == 0 else f"{bils}.{hundred_mils}B"
 
     @classmethod
     async def from_url(cls, url, *, loop=None, stream=False):
@@ -82,6 +100,8 @@ class YTDLSource(discord.PCMVolumeTransformer):
 class Music(commands.Cog):
     def __init__(self, bot_: commands.Bot):
         self.bot = bot_
+        self.auto_voice_disconnect_timeout = 15*60
+        self.connected_voice = {}
 
     @commands.command()
     async def join(self, ctx: commands.Context, *, channel: discord.VoiceChannel):
@@ -149,6 +169,20 @@ class Music(commands.Cog):
                 raise commands.CommandError("Author not connected to a voice channel.")
         elif ctx.voice_client.is_playing():
             ctx.voice_client.stop()
+    
+    @slash_stream.after_invoke
+    @stream.after_invoke
+    async def auto_disconnect_voice(self, ctx: commands.Context):
+        await asyncio.sleep(self.auto_voice_disconnect_timeout)
+        
+        if ctx.voice_client is None or ctx.voice_client.is_playing():
+            return
+        
+        if isinstance(ctx, discord.ApplicationContext):
+            await ctx.followup.send("Automatically disconnected from voice.")
+        else:
+            await ctx.send("Automatically disconnected from voice.")
+        await ctx.voice_client.disconnect(force=True)
     
     @slash_stream.error
     async def handle_slash_stream_error(self, ctx, *_):

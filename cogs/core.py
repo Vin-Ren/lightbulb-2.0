@@ -6,7 +6,7 @@ from discord import Embed, Status, Activity, ActivityType
 
 def format_duration(duration: int):
     duration, seconds = divmod(duration, 60)
-    if seconds == 0: return ""
+    if seconds == 0: return "0s"
     duration, minutes = divmod(duration, 60)
     if minutes == 0: return f"{seconds}s"
     duration, hours = divmod(duration, 24)
