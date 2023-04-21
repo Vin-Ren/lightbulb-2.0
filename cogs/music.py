@@ -103,11 +103,12 @@ class YTDLSource(discord.PCMVolumeTransformer):
 class Music(commands.Cog):
     def __init__(self, bot_: commands.Bot):
         self.bot = bot_
-        self.auto_voice_disconnect_timeout = 15*60
+        self.auto_disconnect_timeout = 15*60
+        self.task_interval = 60
         self.last_timeout = {}
-        self.auto_disconnect_loop = self.bot.loop.create_task(self.auto_disconnect_task())
+        self.bg_tasks = [self.bot.loop.create_task(self.auto_disconnect_task())]
 
-    async def auto_disconnect_task(self):
+    async def disconnect_vcs(self):
         await self.bot.wait_until_ready()
         curr_time = time.time()
         timed_out_ctxs = []
@@ -121,6 +122,12 @@ class Music(commands.Cog):
                 continue
             await ctx.send("Automatically disconnected from voice.")
             await ctx.voice_client.disconnect(force=True)
+    
+    async def auto_disconnect_task(self):
+        await self.bot.wait_until_ready()
+        while not self.bot.is_closed():
+            await self.disconnect_vcs()
+            await asyncio.sleep(self.task_interval)
 
     @commands.command()
     async def join(self, ctx: commands.Context, *, channel: discord.VoiceChannel):
@@ -192,9 +199,9 @@ class Music(commands.Cog):
     
     @slash_stream.after_invoke
     @stream.after_invoke
-    async def auto_disconnect_voice(self, ctx: commands.Context):
+    async def update_disconnect_timeout(self, ctx: commands.Context):
         _id = ctx.guild.id if ctx.guild else 0
-        self.last_timeout[_id] = (ctx, time.time()+self.auto_voice_disconnect_timeout)
+        self.last_timeout[_id] = (ctx, time.time()+self.auto_disconnect_timeout)
     
     @slash_stream.error
     async def handle_slash_stream_error(self, ctx, *_):
