@@ -1,9 +1,11 @@
 
 import asyncio
+import secrets
 import yt_dlp
+import time
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 # Suppress noise about console usage from errors
 yt_dlp.utils.bug_reports_message = lambda: ""
@@ -102,7 +104,23 @@ class Music(commands.Cog):
     def __init__(self, bot_: commands.Bot):
         self.bot = bot_
         self.auto_voice_disconnect_timeout = 15*60
-        self.connected_voice = {}
+        self.last_timeout = {}
+        self.auto_disconnect_loop = self.bot.loop.create_task(self.auto_disconnect_task())
+
+    async def auto_disconnect_task(self):
+        await self.bot.wait_until_ready()
+        curr_time = time.time()
+        timed_out_ctxs = []
+        for gid, (ctx, timeout_at) in self.last_timeout.items():
+            if timeout_at<curr_time:
+                timed_out_ctxs.append((gid, ctx))
+        
+        for gid, ctx in timed_out_ctxs:
+            self.last_timeout.pop(gid)
+            if ctx.voice_client is None or ctx.voice_client.is_playing(): 
+                continue
+            await ctx.send("Automatically disconnected from voice.")
+            await ctx.voice_client.disconnect(force=True)
 
     @commands.command()
     async def join(self, ctx: commands.Context, *, channel: discord.VoiceChannel):
@@ -113,7 +131,7 @@ class Music(commands.Cog):
 
         await channel.connect()
 
-    @commands.command(aliases=['play'])
+    @commands.command(aliases=['play', 'p'])
     async def stream(self, ctx: commands.Context, *, url: str):
         """Streams audio from a url or query"""
 
@@ -175,13 +193,8 @@ class Music(commands.Cog):
     @slash_stream.after_invoke
     @stream.after_invoke
     async def auto_disconnect_voice(self, ctx: commands.Context):
-        await asyncio.sleep(self.auto_voice_disconnect_timeout)
-        
-        if ctx.voice_client is None or ctx.voice_client.is_playing():
-            return
-        
-        await ctx.send("Automatically disconnected from voice.")
-        await ctx.voice_client.disconnect(force=True)
+        _id = ctx.guild.id if ctx.guild else 0
+        self.last_timeout[_id] = (ctx, time.time()+self.auto_voice_disconnect_timeout)
     
     @slash_stream.error
     async def handle_slash_stream_error(self, ctx, *_):
