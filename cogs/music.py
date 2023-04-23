@@ -155,9 +155,12 @@ class Music(commands.Cog):
         await msg.edit(content="Finished playing.", embeds=[embed])
     
     @commands.slash_command(name='play')
-    async def slash_stream(self, ctx: discord.ApplicationContext, url: str):
+    @discord.option("url", description="Url or query of the source")
+    @discord.option("ephemeral", choices=["Normal", "Ephemeral"], default="Normal", description="Message visible only for you", required=False)
+    async def slash_stream(self, ctx: discord.ApplicationContext, url: str, ephemeral: str):
         """Streams audio from a url or query"""
-        response = await ctx.respond(content="Processing request...")
+        ephemeral_ = (ephemeral == 'Ephemeral')
+        response = await ctx.respond(content="Processing request...", ephemeral=ephemeral_)
         
         player = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
         ctx.voice_client.play(player, after=lambda e: print(f"Player error: {e}") if e else None)
