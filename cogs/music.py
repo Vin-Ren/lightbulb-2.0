@@ -146,7 +146,7 @@ class MusicQueue(commands.Cog):
                 embed.title="Added entry"
                 await ctx.send(embed=embed)
 
-    @commands.command(aliases=['eq', 'enqueue'])
+    @commands.command(aliases=['eq', 'enq'])
     async def enqueue(self, ctx: commands.Context, *, url: str):
         "Adds the entry to the queue"
         qm = await self.get_guild_queue_manager(ctx)
