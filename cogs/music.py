@@ -1,103 +1,266 @@
 
 import asyncio
-import secrets
-import yt_dlp
 import time
 
 import discord
-from discord.ext import commands, tasks
-
-# Suppress noise about console usage from errors
-yt_dlp.utils.bug_reports_message = lambda: ""
+from discord.ext import commands, pages, bridge
+from utils.downloader import YTDLSource
 
 
-ytdl_format_options = {
-    "format": "bestaudio/best",
-    "outtmpl": "%(extractor)s-%(id)s-%(title)s.%(ext)s",
-    "restrictfilenames": True,
-    "noplaylist": True,
-    "nocheckcertificate": True,
-    "ignoreerrors": False,
-    "logtostderr": False,
-    "quiet": True,
-    "no_warnings": True,
-    "default_search": "auto",
-    "source_address": (
-        "0.0.0.0"
-    ),  # Bind to ipv4 since ipv6 addresses cause issues at certain times
-}
-
-ffmpeg_options = {
-    'options': '-vn',
-    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
-}
-
-ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
-
-
-class YTDLSource(discord.PCMVolumeTransformer):
-    def __init__(self, source: discord.AudioSource, *, data: dict, volume: float = 0.5):
-        super().__init__(source, volume)
-
-        self.data = data
-
-        self.title = data.get("title")
-        self.url = data.get("url")
-        self.humanized_data = {'duration': self.format_duration(data.get('duration', -1)), 
-                               'views': self.format_numbers(data.get('view_count', -1)), 
-                               'likes': self.format_numbers(data.get('like_count', -1))}
+class QueueManager:
+    def __init__(self, bot: commands.Bot, voice_channel: discord.VoiceClient, last_message: discord.Message):
+        self.queue:list[YTDLSource]=[]
+        self.bot=bot
+        self._index=0
+        self._current_vc=voice_channel
+        self.last_message=last_message
+        self.lock = asyncio.Lock()
     
-    def create_discord_embed(self, **kwargs):
-        embed = discord.Embed(title="Now playing", **kwargs)
-        embed.add_field(name="Title", value=f'{self.data["title"]} [🔗 Link]({self.data["webpage_url"]})')
-        embed.add_field(name="Uploader", value=self.data["uploader"])
-        embed.add_field(name="Duration", value=self.humanized_data['duration'])
-        embed.add_field(name="Views", value=self.humanized_data['views'])
-        embed.add_field(name="Likes", value=self.humanized_data['likes'])
-        embed.set_thumbnail(url=self.data["thumbnail"])
-        return embed
+    @property
+    def index(self):
+        return self._index
     
-    @staticmethod
-    def format_duration(duration: int):
-        if duration == -1: return 'Unknown'
-        duration, seconds = divmod(duration, 60)
-        if seconds == 0:
-            return "LIVE"
-        duration, minutes = divmod(duration, 60)
-        if minutes == 0: return f"{seconds}s"
-        duration, hours = divmod(duration, 24)
-        if hours == 0: return f"{minutes}m {seconds}s"
-        return f"{hours}h {minutes}m {seconds}s"
+    @index.setter
+    def index(self, newidx:int):
+        self._index=newidx
+        if (self._current_vc is None): return
+        self._current_vc.stop()
+        self.bot.loop.run_in_executor(None, lambda :(self.play(self._current_vc)))
     
-    @staticmethod
-    def format_numbers(number: int):
-        if number == -1: return 'Unknown'
-        thousands, ones = divmod(number, 1000)
-        if thousands == 0:
-            return f"{ones}"
-        mils, thousands = divmod(thousands, 1000)
-        if mils == 0:
-            return f"{thousands}K"
-        bils, mils = divmod(mils, 1000)
-        if bils == 0:
-            hundred_thousands, thousands = divmod(thousands, 100)
-            return f"{mils}M" if hundred_thousands == 0 else f"{mils}.{hundred_thousands}M"
-        hundred_mils, mils = divmod(mils, 100)
-        return f"{bils}B" if hundred_mils == 0 else f"{bils}.{hundred_mils}B"
+    def get_pages(self, per_page: int = 4):
+        embeds = [src.create_discord_embed() for src in self.queue]
+        _pages=[]
+        for i, page in enumerate(embeds):
+            page.title=f"Entry#{i+1}"
+        i=0
+        cpage = []
+        while i<len(embeds):
+            cpage.append(embeds[i])
+            if (i+1)%per_page==0:
+                _pages.append(cpage.copy())
+                cpage.clear()
+            i+=1
+        if len(cpage):
+            _pages.append(cpage)
+        if len(_pages)<=0:
+            _pages.append(discord.Embed(title="The queue is empty...."))
+        return _pages
 
-    @classmethod
-    async def from_url(cls, url, *, loop=None, stream=False):
-        loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(
-            None, lambda: ytdl.extract_info(url, download=not stream)
+    def get_paginator(self):
+        page_buttons = [
+            pages.PaginatorButton(
+                "first", label="<<-", style=discord.ButtonStyle.green
+            ),
+            pages.PaginatorButton("prev", label="<-", style=discord.ButtonStyle.green),
+            pages.PaginatorButton(
+                "page_indicator", style=discord.ButtonStyle.gray, disabled=True
+            ),
+            pages.PaginatorButton("next", label="->", style=discord.ButtonStyle.green),
+            pages.PaginatorButton("last", label="->>", style=discord.ButtonStyle.green),
+        ]
+        paginator = pages.Paginator(
+            pages=self.get_pages(),
+            show_disabled=True,
+            show_indicator=True,
+            use_default_buttons=False,
+            custom_buttons=page_buttons,
+            loop_pages=True,
         )
+        return paginator
+    
+    def enqueue(self, src: YTDLSource):
+        self.queue.append(src)
+    
+    async def add_from_url(self, url):
+        while self.lock.locked():
+            await asyncio.sleep(1)
+        await self.lock.acquire()
+        entry = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
+        self.queue.append(entry)
+        self.lock.release()
+        return entry
+    
+    def skip(self):
+        self.index=self.index
+    
+    def reset(self):
+        if (self._current_vc is not None):
+            self._current_vc.stop()
+        self.queue.clear()
+        self.index=0
+    
+    async def stop(self):
+        self._current_vc.stop()
+    
+    async def play(self, voice_client: discord.VoiceClient):
+        self._current_vc=voice_client
+        while self.lock.locked():
+            await asyncio.sleep(1)
+        while voice_client.is_connected() and self.index<len(self.queue):
+            player = self.queue[self.index]
+            ctx = await self.bot.get_context(self.last_message)
+            embed = player.create_discord_embed(color=ctx.author.color)
+            embed.title=embed.title+f" ({self.index+1} of {len(self.queue)})"
+            await ctx.send(embed=embed)
+            voice_client.play(player, after=lambda e: print(f"Player error: {e}") if e else None)
+            while voice_client.is_playing():
+                await asyncio.sleep(1)
+            self.index+=1
 
-        if "entries" in data:
-            # Takes the first item from a playlist
-            data = data["entries"][0]
 
-        filename = data["url"] if stream else ytdl.prepare_filename(data)
-        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+class MusicQueue(commands.Cog):
+    def __init__(self, bot_: commands.Bot):
+        self.bot = bot_
+        self.queue_managers: dict[int, QueueManager] = {}
+    
+    async def get_guild_queue_manager(self, ctx: commands.Context):
+        if (self.queue_managers.get(ctx.guild.id) is None):
+            if (ctx.author.voice is None):
+                await ctx.send("You are not connected to a voice channel.")
+                raise commands.CommandError("Author not connected to a voice channel.")
+            self.queue_managers[ctx.guild.id] = QueueManager(self.bot, ctx.author.voice.channel, ctx.message)
+        self.queue_managers[ctx.guild.id].last_message=ctx.message
+        return self.queue_managers[ctx.guild.id]
+
+    @commands.command(aliases=['showq'])
+    async def show_queue(self, ctx: commands.Context):
+        nctx = bridge.BridgeExtContext(message=ctx.message, bot=self.bot, view=ctx.view)
+        qm = await self.get_guild_queue_manager(ctx)
+        paginator = qm.get_paginator()
+        await paginator.respond(nctx)
+    
+    @commands.slash_command(name='showq')
+    async def slash_show_queue(self, ctx: discord.ApplicationContext):
+        "Shows queue"
+        qm = await self.get_guild_queue_manager(ctx)
+        paginator = qm.get_paginator()
+        await paginator.respond(ctx.interaction)
+    
+    @commands.command(aliases=['mq'])
+    async def multi_queue(self, ctx: commands.Context, *, url:str):
+        "Adds multiple item to the queue, seperated by commas [,]"
+        qm = await self.get_guild_queue_manager(ctx)
+        with ctx.typing():
+            for name in url.split(','):
+                entry = await qm.add_from_url(name)
+                embed = entry.create_discord_embed()
+                embed.title="Added entry"
+                await ctx.send(embed=embed)
+
+    @commands.command(aliases=['eq'])
+    async def enqueue(self, ctx: commands.Context, *, url: str):
+        "Adds the entry to the queue"
+        qm = await self.get_guild_queue_manager(ctx)
+        with ctx.typing():
+            entry = await qm.add_from_url(url)
+        embed = entry.create_discord_embed()
+        embed.title="Added entry"
+        await ctx.send(embed=embed)
+    
+    @commands.slash_command(name='enqueue')
+    @discord.option("url", description="Url or query of the source")
+    async def slash_enqueue(self, ctx: discord.ApplicationContext, url: str):
+        "Adds the entry to the queue"
+        qm = await self.get_guild_queue_manager(ctx)
+        response = await ctx.respond(content="Processing request...")
+        with ctx.typing():
+            entry = await qm.add_from_url(url)
+            embed = entry.create_discord_embed()
+            embed.title="Added entry"
+            await response.edit_original_response(content="", embeds=[embed])
+    
+    @commands.command(aliases=['pq', 'playq'])
+    async def play_queue(self, ctx: commands.Context):
+        "Starts queue playback"
+        qm = await self.get_guild_queue_manager(ctx)
+        if len(qm.queue) <=0:
+            await ctx.send("The queue is empty.")
+            return
+        await qm.play(ctx.voice_client)
+    
+    @commands.slash_command(name='playqueue')
+    async def slash_play_queue(self, ctx: discord.ApplicationContext):
+        "Adds the entry to the queue"
+        qm = await self.get_guild_queue_manager(ctx)
+        if len(qm.queue)<=0:
+            await ctx.respond(content="The queue is empty.")
+            return
+        await ctx.respond(content="Starting queue playback...")
+        await qm.play(ctx.voice_client)
+    
+    @commands.command(aliases=['rep', 'replay'])
+    async def replay_queue(self, ctx: commands.Context):
+        "Replays the queue from the beginning"
+        qm = await self.get_guild_queue_manager(ctx)
+        if len(qm.queue)<=0:
+            await ctx.respond(content="The queue is empty.")
+            return
+        qm.index=0
+    
+    @commands.slash_command(name='replayqueue')
+    async def slash_play_queue(self, ctx: discord.ApplicationContext):
+        "Replays the queue from the beginning"
+        qm = await self.get_guild_queue_manager(ctx)
+        if len(qm.queue)<=0:
+            await ctx.respond(content="The queue is empty.")
+            return
+        await ctx.respond(content="Starting queue replay...")
+        qm.index=0
+    
+    @commands.command(aliases=['sk', 'skp', 'skip'])
+    async def skip_queue_entry(self, ctx: commands.Context):
+        "Skips current entry"
+        qm = await self.get_guild_queue_manager(ctx)
+        await ctx.send("Skipping current entry...")
+        qm.skip()
+    
+    @commands.slash_command(name='replayqueue')
+    async def slash_skip_queue_entry(self, ctx: discord.ApplicationContext):
+        "Skips current entry"
+        qm = await self.get_guild_queue_manager(ctx)
+        await ctx.respond(content="Skipping current entry...")
+        qm.skip()
+    
+    @commands.command(aliases=['cq', 'clearq'])
+    async def clear_queue(self, ctx: commands.Context):
+        "Clears queue"
+        qm = await self.get_guild_queue_manager(ctx)
+        qm.reset()
+        await ctx.send("Cleared queue")
+    
+    @commands.slash_command(name='clearqueue')
+    async def slash_skip_queue_entry(self, ctx: discord.ApplicationContext):
+        "Clears queue"
+        qm = await self.get_guild_queue_manager(ctx)
+        qm.reset()
+        await ctx.respond(content="Cleared queue")
+    
+    @commands.command(aliases=['sq', 'stopq'])
+    async def stop_queue(self, ctx: commands.Context):
+        "Stops queue playing session"
+        qm = await self.get_guild_queue_manager(ctx)
+        await qm.stop()
+        await ctx.send("Stopped queue playback")
+    
+    @commands.slash_command(name='clearqueue')
+    async def slash_skip_queue_entry(self, ctx: discord.ApplicationContext):
+        "Stops queue playing session"
+        qm = await self.get_guild_queue_manager(ctx)
+        await qm.stop()
+        await ctx.respond(content="Stopped queue playback")
+    
+    @slash_play_queue.before_invoke
+    @play_queue.before_invoke
+    async def ensure_clean_voice(self, ctx: commands.Context):
+        if ctx.voice_client is None:
+            if ctx.author.voice:
+                await ctx.author.voice.channel.connect()
+                await ctx.guild.change_voice_state(channel=ctx.author.voice.channel, self_mute=False, self_deaf=True)
+            else:
+                await ctx.send("You are not connected to a voice channel.")
+                raise commands.CommandError("Author not connected to a voice channel.")
+        elif ctx.voice_client.is_playing():
+            ctx.voice_client.stop()
 
 
 class Music(commands.Cog):
@@ -137,7 +300,7 @@ class Music(commands.Cog):
             return await ctx.voice_client.move_to(channel)
 
         await channel.connect()
-
+    
     @commands.command(aliases=['play', 'p'])
     async def stream(self, ctx: commands.Context, *, url: str):
         """Streams audio from a url or query"""
@@ -186,10 +349,10 @@ class Music(commands.Cog):
         """Stops and disconnects the bot from voice"""
 
         await ctx.voice_client.disconnect(force=True)
-
+    
     @slash_stream.before_invoke
     @stream.before_invoke
-    async def ensure_voice(self, ctx: commands.Context):
+    async def ensure_clean_voice(self, ctx: commands.Context):
         if ctx.voice_client is None:
             if ctx.author.voice:
                 await ctx.author.voice.channel.connect()
@@ -217,3 +380,4 @@ class Music(commands.Cog):
 
 def setup(bot):
     bot.add_cog(Music(bot))
+    bot.add_cog(MusicQueue(bot))

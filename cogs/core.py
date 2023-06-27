@@ -18,23 +18,31 @@ class Core(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.start = round(time.time())
+        self.set_presence = self.normal_presence
 
+    async def normal_presence(self):
+        await self.bot.change_presence(status=Status.online, activity=Activity(type=ActivityType.listening, name="Prefix[~]"))
+    
+    async def maintenance_presence(self):
+        await self.bot.change_presence(status=Status.do_not_disturb, activity=Activity(type=ActivityType.watching, name="Under Maintenance"))
+    
     @commands.Cog.listener()
     async def on_ready(self):
         print("Connection Established.")
         print(f"{f'Connected As [{self.bot.user.name}]':^25}\n")
-        await self.bot.change_presence(status=Status.online, activity=Activity(type=ActivityType.listening, name="Prefix[~]"))
+        await self.set_presence()
 
     def get_info_embed(self, ctx):
         embed=Embed(title="Bot Information", color=discord.Colour.dark_blue())
         embed.add_field(name="Client Name", value=self.bot.user.name, inline=False)
-        embed.add_field(name=f'Servers', value=f'Serving {len(self.bot.guilds)} servers.', inline=False)
+        embed.add_field(name=f'Servers', value=f'Serving {len(self.bot.guilds)} servers', inline=False)
         embed.add_field(name="Uptime", value=format_duration(round(time.time()-self.start)), inline=False)
         embed.add_field(name="Latency", value=f"{round(self.bot.latency*1000)} ms")
         embed.add_field(name="Prefix", value=f"Prefix [~]", inline=False)
         embed.add_field(name="Source Code", value="[Github Repo](https://github.com/Vin-Ren/lightbulb-2.0)", inline=False)
-        embed.set_thumbnail(url=self.bot.user.avatar.url)
         embed.set_footer(icon_url=ctx.author.avatar.url, text=f"Requested by {ctx.author.name}")
+        if self.bot.user.avatar is not None:
+            embed.set_thumbnail(url=self.bot.user.avatar.url)
         return embed
 
     @commands.command(brief="Pings The Server.")
