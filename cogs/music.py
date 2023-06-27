@@ -242,7 +242,7 @@ class MusicQueue(commands.Cog):
         await qm.stop()
         await ctx.send("Stopped queue playback")
     
-    @commands.slash_command(name='clearqueue')
+    @commands.slash_command(name='skipqueue')
     async def slash_skip_queue_entry(self, ctx: discord.ApplicationContext):
         "Stops queue playing session"
         qm = await self.get_guild_queue_manager(ctx)
