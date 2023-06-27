@@ -105,7 +105,7 @@ class QueueManager:
             voice_client.play(player, after=lambda e: print(f"Player error: {e}") if e else None)
             while voice_client.is_playing():
                 await asyncio.sleep(1)
-            self.index+=1
+            self._index+=1
 
 
 class MusicQueue(commands.Cog):
