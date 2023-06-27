@@ -188,24 +188,25 @@ class MusicQueue(commands.Cog):
         await ctx.respond(content="Starting queue playback...")
         await qm.play(ctx.voice_client)
     
-    @commands.command(aliases=['rep', 'replay'])
-    async def replay_queue(self, ctx: commands.Context):
-        "Replays the queue from the beginning"
-        qm = await self.get_guild_queue_manager(ctx)
-        if len(qm.queue)<=0:
-            await ctx.respond(content="The queue is empty.")
-            return
-        qm.index=0
+    # @commands.command(aliases=['rep', 'replay'])
+    # async def replay_queue(self, ctx: commands.Context):
+    #     "Replays the queue from the beginning"
+    #     qm = await self.get_guild_queue_manager(ctx)
+    #     if len(qm.queue)<=0:
+    #         await ctx.respond(content="The queue is empty.")
+    #         return
+    #     qm._index=0
+    #     await qm.play(ctx.voice_client)
     
-    @commands.slash_command(name='replayqueue')
-    async def slash_play_queue(self, ctx: discord.ApplicationContext):
-        "Replays the queue from the beginning"
-        qm = await self.get_guild_queue_manager(ctx)
-        if len(qm.queue)<=0:
-            await ctx.respond(content="The queue is empty.")
-            return
-        await ctx.respond(content="Starting queue replay...")
-        qm.index=0
+    # @commands.slash_command(name='replayqueue')
+    # async def slash_replay_queue(self, ctx: discord.ApplicationContext):
+    #     "Replays the queue from the beginning"
+    #     qm = await self.get_guild_queue_manager(ctx)
+    #     if len(qm.queue)<=0:
+    #         await ctx.respond(content="The queue is empty.")
+    #         return
+    #     await ctx.respond(content="Starting queue replay...")
+    #     qm.index=0
     
     @commands.command(aliases=['sk', 'skp', 'skip'])
     async def skip_queue_entry(self, ctx: commands.Context):
@@ -229,7 +230,7 @@ class MusicQueue(commands.Cog):
         await ctx.send("Cleared queue")
     
     @commands.slash_command(name='clearqueue')
-    async def slash_skip_queue_entry(self, ctx: discord.ApplicationContext):
+    async def slash_clear_queue(self, ctx: discord.ApplicationContext):
         "Clears queue"
         qm = await self.get_guild_queue_manager(ctx)
         qm.reset()

@@ -87,8 +87,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         data = await loop.run_in_executor(
             None, lambda: ytdl.extract_info(url, download=not stream)
         )
-        with open("dump.json", 'w') as f:
-            json.dump(data, f, indent=4)
+        
         if "entries" in data:
             # Takes the first item from a playlist
             data = data["entries"][0]
