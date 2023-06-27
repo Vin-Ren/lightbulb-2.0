@@ -8,12 +8,12 @@ from utils.downloader import YTDLSource
 
 
 class QueueManager:
-    def __init__(self, bot: commands.Bot, voice_channel: discord.VoiceClient, last_message: discord.Message):
+    def __init__(self, bot: commands.Bot, voice_channel: discord.VoiceClient, recent_ctx: commands.Context):
         self.queue:list[YTDLSource]=[]
         self.bot=bot
         self._index=0
         self._current_vc=voice_channel
-        self.last_message=last_message
+        self.recent_ctx=recent_ctx
         self.lock = asyncio.Lock()
     
     @property
@@ -98,10 +98,9 @@ class QueueManager:
             await asyncio.sleep(1)
         while voice_client.is_connected() and self.index<len(self.queue):
             player = self.queue[self.index]
-            ctx = await self.bot.get_context(self.last_message)
             embed = player.create_discord_embed(color=ctx.author.color)
             embed.title=embed.title+f" ({self.index+1} of {len(self.queue)})"
-            await ctx.send(embed=embed)
+            await self.recent_ctx.send(embed=embed)
             voice_client.play(player, after=lambda e: print(f"Player error: {e}") if e else None)
             while voice_client.is_playing():
                 await asyncio.sleep(1)
@@ -119,7 +118,7 @@ class MusicQueue(commands.Cog):
                 await ctx.send("You are not connected to a voice channel.")
                 raise commands.CommandError("Author not connected to a voice channel.")
             self.queue_managers[ctx.guild.id] = QueueManager(self.bot, ctx.author.voice.channel, ctx.message)
-        self.queue_managers[ctx.guild.id].last_message=ctx.message
+        self.queue_managers[ctx.guild.id].recent_ctx=ctx
         return self.queue_managers[ctx.guild.id]
 
     @commands.command(aliases=['showq'])
@@ -147,7 +146,7 @@ class MusicQueue(commands.Cog):
                 embed.title="Added entry"
                 await ctx.send(embed=embed)
 
-    @commands.command(aliases=['eq'])
+    @commands.command(aliases=['eq', 'enqueue'])
     async def enqueue(self, ctx: commands.Context, *, url: str):
         "Adds the entry to the queue"
         qm = await self.get_guild_queue_manager(ctx)
