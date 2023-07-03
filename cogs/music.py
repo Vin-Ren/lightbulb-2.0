@@ -9,11 +9,12 @@ from utils.downloader import YTDLSource
 
 class QueueManager:
     def __init__(self, bot: commands.Bot, voice_channel: discord.VoiceClient, recent_ctx: commands.Context):
-        self.queue:list[YTDLSource]=[]
-        self.bot=bot
-        self._index=0
-        self._current_vc=voice_channel
-        self.recent_ctx=recent_ctx
+        self.queue: list[YTDLSource] = []
+        self.bot = bot
+        self._index = 0
+        self._current_vc = voice_channel
+        self.recent_ctx = recent_ctx
+        self._volume = 1.0
         self.lock = asyncio.Lock()
     
     @property
@@ -26,6 +27,16 @@ class QueueManager:
         if (self._current_vc is None): return
         self._current_vc.stop()
         self.bot.loop.run_in_executor(None, lambda :(self.play(self._current_vc)))
+    
+    @property
+    def volume(self):
+        return self._volume
+    
+    @volume.setter
+    def volume(self, new_volume):
+        self._volume=new_volume
+        if self._current_vc.source is not None:
+            self._current_vc.source.volume=self._volume
     
     def get_pages(self, per_page: int = 4):
         embeds = [src.create_discord_embed() for src in self.queue]
@@ -98,6 +109,7 @@ class QueueManager:
             await asyncio.sleep(1)
         while voice_client.is_connected() and self.index<len(self.queue):
             player = self.queue[self.index]
+            player.volume=self.volume
             embed = player.create_discord_embed(color=self.recent_ctx.author.color)
             embed.title=embed.title+f" ({self.index+1} of {len(self.queue)})"
             await self.recent_ctx.send(embed=embed)
@@ -242,6 +254,16 @@ class MusicQueue(commands.Cog):
         await qm.stop()
         await ctx.send("Stopped queue playback")
     
+    @commands.command(aliases=['qv'])
+    async def queuevolume(self, ctx: commands.Context, volume: int):
+        """Changes the queue playback's volume"""
+        volume=max(min(volume, 200), 0)
+        if ctx.voice_client is None:
+            return await ctx.send("Not connected to a voice channel.")
+        qm = await self.get_guild_queue_manager(ctx)
+        qm.volume = volume / 100
+        await ctx.send(f"Changed volume to {volume}%")
+    
     @commands.slash_command(name='skipqueue')
     async def slash_skip_queue_entry(self, ctx: discord.ApplicationContext):
         "Stops queue playing session"
@@ -334,7 +356,7 @@ class Music(commands.Cog):
         await asyncio.sleep(player.data["duration"])
         await response.edit_original_response(content="Finished playing.", embeds=[embed])
 
-    @commands.command()
+    @commands.command(aliases=['vol', 'v'])
     async def volume(self, ctx: commands.Context, volume: int):
         """Changes the player's volume"""
 
