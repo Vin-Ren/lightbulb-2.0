@@ -98,7 +98,7 @@ class QueueManager:
             await asyncio.sleep(1)
         while voice_client.is_connected() and self.index<len(self.queue):
             player = self.queue[self.index]
-            embed = player.create_discord_embed(color=ctx.author.color)
+            embed = player.create_discord_embed(color=self.recent_ctx.author.color)
             embed.title=embed.title+f" ({self.index+1} of {len(self.queue)})"
             await self.recent_ctx.send(embed=embed)
             voice_client.play(player, after=lambda e: print(f"Player error: {e}") if e else None)
