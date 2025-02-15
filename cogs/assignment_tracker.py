@@ -58,8 +58,8 @@ class Assignment:
     
     def get_embed(self):
         embed = discord.Embed(
-        title=f"📌 Assignment: {self.name} (#{self.id})",  # ID now looks cleaner
-        color=discord.Color.blue()  # Change color if needed
+            title=f"📌 Assignment: {self.name} (#{self.id})",  # ID now looks cleaner
+            color=discord.Color.blue()  # Change color if needed
         )
 
         # Assigned Groups (Handles empty case)
@@ -264,31 +264,13 @@ class ServerAssignmentManager:
         self.past_assignments[assignment_id]=assignment
     
     def get_dashboard_message(self):
-        """📚 **Active Assignments**
-
-📝 **Assignment 1**  
-📂 *Subject:* Math  
-⏳ *Deadline:* 2025-03-10 23:59  
-⏲ *Time Left:* 2 days 5 hours  
-
-📝 **Assignment 2**  
-📂 *Subject:* Science  
-⏳ *Deadline:* 2025-03-12 18:00  
-⏲ *Time Left:* 4 days 3 hours  
-
-📝 **Assignment 3**  
-📂 *Subject:* History  
-⏳ *Deadline:* 2025-03-15 12:00  
-⏲ *Time Left:* 7 days 9 hours  
-
-⚠️ **Note:** Time left updates dynamically."""
         assignments_sorted_by_deadline = sorted([e for e in self.assignments.values()], key=lambda e:e.deadline)
         dashboard_message = "## 📚 **Active Assignments**"
         critical_time = False
         for assignment in assignments_sorted_by_deadline:
             timeleft = assignment.deadline-datetime.now(tz=UTC)
             timeleft_str = timedelta_to_human(timeleft)
-            if (timeleft<timedelta(days=100)):
+            if (timeleft<timedelta(days=1)):
                 timeleft_str = f"⚠️ **{timeleft_str[:-5]} LEFT!** "
                 critical_time = True
             current_section = [f"📝 **Assignment {assignment.name}**",
@@ -351,7 +333,7 @@ class AssignmentTracker(commands.Cog):
             manager.dashboard_message_id = new_message.id
         # self.synchronize_dashboard.start()
     
-    @tasks.loop(seconds=2)
+    @tasks.loop(seconds=1)
     async def synchronize_dashboard(self):
         # print("Syncing dashboard")
         for manager in self.assignments_by_server.values():
@@ -512,6 +494,14 @@ class AssignmentTracker(commands.Cog):
         if manager.archive_assignment(assignment_id):
             return await ctx.send(f"Successfully archived Assignment#{assignment_id}!")
         await ctx.send(f"Failed to archive assignment.")
+    
+    
+    @commands.command(aliases=['forcesave'])
+    @has_been_setup()
+    @commands.is_owner()
+    async def force_save(self, ctx: commands.Context):
+        self.save()
+        return await ctx.send("Successfully saved data.")
     
     # @bind_tracker_announcer_channel.after_invoke
     # @create_group.after_invoke
