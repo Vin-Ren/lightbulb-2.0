@@ -44,24 +44,24 @@ def timedelta_to_human(td: timedelta) -> str:
     return " ".join(parts) + " left"
 
 
-# Helper function to format assignments
-def format_assignment(assignment, status_emoji, now: datetime = datetime.now(tz=timezone.utc), completed=True):
+def format_assignment(assignment, status="active", now: datetime = datetime.now(tz=timezone.utc), completed=True):
     deadline_str = assignment.deadline.strftime("%A, %d %B %Y at %I:%M %p")
-    time_left = timedelta_to_human(assignment.deadline - now)
+    base_info = f"📂 **Subject:** {humanize.natural_list(assignment.groups)}\n" \
+                f"⏳ **Deadline:** {deadline_str}"
 
-    text = (
-        f"📂 **Subject:** {humanize.natural_list(assignment.groups)}\n"
-        f"⏳ **Deadline:** {deadline_str}\n"
-    )
-    if status_emoji!="🕒":
-        text+=f"⚡ **{time_left} remaining!**"
-    elif completed:
-        text+=f"✅ **Completed**"
+    if status == "active":
+        time_left = timedelta_to_human(assignment.deadline - now)
+        status_info = f"{base_info}\n⚡ **{time_left} remaining!**"
+    elif status == "completed" or completed:
+        status_info = f"{base_info}\n✅ **Completed**"
+    elif status == "past":
+        status_info = f"{base_info}\n❌ **Deadline Missed**"
     else:
-        text+=f"🚨 **Missed Deadline**"
+        status_info = ""
+    # Include link if available
     if assignment.link:
-        text += f"\n🔗 **[Resource]({assignment.link})**"
-    return f"{status_emoji} **{assignment.name} (#{assignment.id})**\n{text}\n"
+        return f"{base_info}\n{status_info}\n🔗 **[Resource]({assignment.link})**"
+    return f"{base_info}\n{status_info}"
 
 
 def get_toggle_message(feature_name: str, is_enabled: bool):
@@ -334,24 +334,24 @@ class ServerAssignmentManager:
             color=embed_color
         )
 
-        # Add active assignments
         if active_assignments:
-            embed.add_field(
-                name="📌 **Active Assignments**",
-                value="\n".join(format_assignment(a, "📌", now) for a in active_assignments),
-                inline=False
-            )
+            embed.add_field(name="📌 **Active Assignments**\n━━━━━━━━━━━━━━━━", value="These assignments are still open:", inline=False)
+            for assignment in active_assignments:
+                embed.add_field(name=f"📌 {assignment.name} (#{assignment.id})", 
+                                value=format_assignment(assignment, "active"), inline=False)
+            if past_assignments:
+                embed.add_field(name="\u200b", value="━━━━━━━━━━━━━━━━", inline=False)  # Separator
 
-        # Add past assignments
+        # Add Past Assignments
         if past_assignments:
-            embed.add_field(
-                name="🕒 **Past Assignments**",
-                value="\n".join(format_assignment(a, "🕒", completed=False) for a in past_assignments),
-                inline=False
-            )
+            embed.add_field(name="🕒 **Past Assignments**\n━━━━━━━━━━━━━━━━", value="These assignments were not submitted on time:", inline=False)
+            for assignment in past_assignments:
+                embed.add_field(name=f"🕒 {assignment.name} (#{assignment.id})", 
+                                value=format_assignment(assignment, "past", completed=False), inline=False)
 
         # Footer
-        embed.set_footer(text="⚡ Stay organized and submit on time!", icon_url="https://cdn-icons-png.flaticon.com/512/1828/1828640.png")
+        embed.set_footer(text="⚡ Stay organized and keep up the great work!", 
+                        icon_url="https://cdn-icons-png.flaticon.com/512/1828/1828640.png")
 
         return embed
 
@@ -391,18 +391,29 @@ class ServerAssignmentManager:
             color=embed_color
         )
 
-        # Add active assignments
         if active_assignments:
-            embed.add_field(name="📌 **Active Assignments**", value="\n".join(format_assignment(a, "📌", now) for a in active_assignments), inline=False)
-
-        # Add completed assignments
+            embed.add_field(name="📌 **Active Assignments**\n━━━━━━━━━━━━━━━━", value="These assignments are still open:", inline=False)
+            for assignment in active_assignments:
+                embed.add_field(name=f"📌 {assignment.name} (#{assignment.id})", 
+                                value=format_assignment(assignment, "active"), inline=False)
+            embed.add_field(name="\u200b", value="━━━━━━━━━━━━━━━━", inline=False)  # Separator
+        
+        # Add Completed Assignments
         if include_completed and completed_assignments:
-            embed.add_field(name="✅ **Completed Assignments**", value="\n".join(format_assignment(a, "✅", now) for a in completed_assignments), inline=False)
-
-        # Add past assignments
+            embed.add_field(name="✅ **Completed Assignments**\n━━━━━━━━━━━━━━━━", value="You’ve finished these assignments:", inline=False)
+            for assignment in completed_assignments:
+                embed.add_field(name=f"✅ {assignment.name} (#{assignment.id})", 
+                                value=format_assignment(assignment, "completed"), inline=False)
+            if past_assignments:
+                embed.add_field(name="\u200b", value="━━━━━━━━━━━━━━━━", inline=False)  # Separator
+        
+        # Add Past Assignments
         if past_assignments:
-            embed.add_field(name="🕒 **Past Assignments**", value="\n".join(format_assignment(a, "🕒", completed=True) for a in past_assignments), inline=False)
-
+            embed.add_field(name="🕒 **Past Assignments**\n━━━━━━━━━━━━━━━━", value="These assignments were not submitted on time:", inline=False)
+            for assignment in past_assignments:
+                embed.add_field(name=f"🕒 {assignment.name} (#{assignment.id})", 
+                                value=format_assignment(assignment, "past", completed=True), inline=False)
+        
         # Footer
         embed.set_footer(text="⚡ Stay organized and submit on time!", icon_url="https://cdn-icons-png.flaticon.com/512/1828/1828640.png")
 
