@@ -136,7 +136,7 @@ class ServerAssignmentManager:
         self.group_assignments: dict[str, set[str]] = dict() # {group: [assigments]}
         self.user_checklist: dict[str, set[str]] = dict() # {user: [assignments]}
         self.last_assignment_id = 0
-        self.disable_dasboard = False
+        self.disable_dasboard = True
     
     @classmethod
     def from_dict(cls, data: dict):
@@ -475,7 +475,7 @@ class AssignmentTracker(commands.Cog):
                     if message is not None:
                         await message.delete()
             except discord.errors.NotFound:
-                pass
+                manager.dashboard_message_id = ""
             new_message = await channel.send(manager.get_dashboard_message())
             # new_message = await channel.send(embed=manager.get_assignments_embed())
             manager.dashboard_message_id = new_message.id
@@ -498,7 +498,23 @@ class AssignmentTracker(commands.Cog):
                     await message.edit(content=manager.get_dashboard_message())
                     # await message.edit(embed=manager.get_assignments_embed())
             except discord.errors.NotFound:
-                continue
+                manager.dashboard_message_id = ""
+    
+    async def fix_dashboard_message(self, server_id: str):
+        manager = self.get_manager(server_id)
+        if manager.disable_dasboard and manager.dashboard_message_id:
+            channel = self.bot.get_channel(int(manager.announcer_channel_id))
+            if channel is None:
+                return
+            if manager.dashboard_message_id != "":
+                message = await channel.fetch_message(int(manager.dashboard_message_id))
+                if message is not None:
+                    await message.delete()
+        elif not manager.disable_dasboard and not manager.dashboard_message_id:
+            channel = self.bot.get_channel(int(manager.announcer_channel_id))
+            if channel is None:
+                return
+            await channel.send(content=manager.get_dashboard_message())
     
     def load(self):
         try: 
@@ -667,6 +683,7 @@ class AssignmentTracker(commands.Cog):
         manager = self.get_manager(ctx.guild.id)
         await ctx.send(embed=get_toggle_message("Dashboard message", not manager.disable_dasboard))
         manager.toggle_dashboard()
+        self.fix_dashboard_message()
     
     @commands.command(aliases=['forcesave'])
     @has_been_setup()
