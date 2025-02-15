@@ -474,7 +474,7 @@ class AssignmentTracker(commands.Cog):
                     message = await channel.fetch_message(int(manager.dashboard_message_id))
                     if message is not None:
                         await message.delete()
-            except discord.errors.NotFound:
+            except (discord.errors.NotFound, ValueError):
                 manager.dashboard_message_id = ""
                 await self.fix_dashboard_message(manager.server_id)
             new_message = await channel.send(manager.get_dashboard_message())
@@ -496,7 +496,7 @@ class AssignmentTracker(commands.Cog):
                 if message is not None:
                     await message.edit(content=manager.get_dashboard_message())
                     # await message.edit(embed=manager.get_assignments_embed())
-            except discord.errors.NotFound:
+            except (discord.errors.NotFound, ValueError):
                 manager.dashboard_message_id = ""
                 await self.fix_dashboard_message(manager.server_id)
     
@@ -507,14 +507,18 @@ class AssignmentTracker(commands.Cog):
             if channel is None:
                 return
             if manager.dashboard_message_id != "":
-                message = await channel.fetch_message(int(manager.dashboard_message_id))
-                if message is not None:
-                    await message.delete()
+                try:
+                    message = await channel.fetch_message(int(manager.dashboard_message_id))
+                    if message is not None:
+                        await message.delete()
+                except:
+                    pass
         elif not manager.disable_dasboard and not manager.dashboard_message_id:
             channel = self.bot.get_channel(int(manager.announcer_channel_id))
             if channel is None:
                 return
-            await channel.send(content=manager.get_dashboard_message())
+            msg = await channel.send(content=manager.get_dashboard_message())
+            manager.dashboard_message_id = msg.id
     
     def load(self):
         try: 
@@ -547,7 +551,7 @@ class AssignmentTracker(commands.Cog):
     async def bind_tracker_announcer_channel(self, ctx: commands.Context, channel: discord.TextChannel = None):
         if channel==None:
             channel = ctx.channel
-        if ctx.guild.id not in self.assignments_by_server:
+        if str(ctx.guild.id) not in self.assignments_by_server:
             self.assignments_by_server[str(ctx.guild.id)] = ServerAssignmentManager(ctx.guild.id, channel.id)
             await ctx.send(f"Successfully setup tracker and set <#{channel.id}> as an announcer channel.")
         else:
@@ -588,7 +592,7 @@ class AssignmentTracker(commands.Cog):
         for group in groups:
             if manager.subscribe(str(ctx.author.id), group):
                 successful.append(group.upper())
-        await ctx.send(f"Successfully subscribed to groups=[{', '.join(successful)}].")
+        await ctx.send(f"Successfully subscribed to groups: {humanize.natural_list(successful)}].")
     
     @commands.command(aliases=['unsubscribe'])
     @has_been_setup()
@@ -599,7 +603,7 @@ class AssignmentTracker(commands.Cog):
         for group in groups:
             if manager.unsubscribe(str(ctx.author.id), group):
                 successful.append(group.upper())
-        await ctx.send(f"Successfully unsubscribed from groups=[{', '.join(successful)}].")
+        await ctx.send(f"Successfully unsubscribed from groups=[{humanize.lists(successful)}].")
     
     @commands.command(aliases=['listall', 'listallassign'])
     @has_been_setup()
@@ -618,6 +622,16 @@ class AssignmentTracker(commands.Cog):
         for _ in range(10):
             await asyncio.sleep(1)
             await msg.edit(embed=manager.get_personal_assignments_embed(ctx.author.id, include_completed=modifier=='all'))
+    
+    @commands.slash_command(name='listmine')
+    @discord.option("mode", choices=["Todo", "All"], default="Todo", description="View only todo or view all of your assignments", required=False)
+    async def list_personal_assignments_slash(self, ctx: discord.ApplicationContext, mode: str = "Todo"):
+        """Lists your assignments, visible only to yourself."""
+        manager = self.get_manager(ctx.guild.id)
+        response = await ctx.respond(embed=manager.get_personal_assignments_embed(ctx.author.id, mode=='All'), ephemeral=True)
+        for _ in range(10):
+            await asyncio.sleep(1)
+            await response.edit(embed=manager.get_personal_assignments_embed(ctx.author.id, include_completed=mode=='all'))
     
     @commands.command(aliases=['completed', 'done'])
     @has_been_setup()
