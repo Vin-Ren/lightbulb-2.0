@@ -400,7 +400,7 @@ class ServerAssignmentManager:
                 critical_time = True
             current_section = [f"📝 **Assignment {assignment.name}**",
                                f"📂 *Subject:* {humanize.lists.natural_list(assignment.groups)}",
-                               f"⏳ *Deadline:* {assignment.deadline.strftime("%A, %d %B %Y at %I:%M %p")}",
+                               f"⏳ *Deadline:* {assignment.deadline.strftime('%A, %d %B %Y at %I:%M %p')}",
                                f"⏲ *Time Left:* {timeleft_str}"]
             current_section_str = '\n'.join(current_section)
             dashboard_message+='\n\n═══════════════════════\n'+current_section_str
