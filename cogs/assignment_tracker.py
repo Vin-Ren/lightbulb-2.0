@@ -51,11 +51,11 @@ def format_assignment(assignment, status="active", now: datetime = datetime.now(
 
     if status == "active":
         time_left = timedelta_to_human(assignment.deadline - now)
-        status_info = f"{base_info}\n⚡ **{time_left} remaining!**"
+        status_info = f"⚡ **{time_left} remaining!**"
     elif status == "completed" or completed:
-        status_info = f"{base_info}\n✅ **Completed**"
+        status_info = f"✅ **Completed**"
     elif status == "past":
-        status_info = f"{base_info}\n❌ **Deadline Missed**"
+        status_info = f"❌ **Deadline Missed**"
     else:
         status_info = ""
     # Include link if available
@@ -338,7 +338,7 @@ class ServerAssignmentManager:
             embed.add_field(name="📌 **Active Assignments**\n━━━━━━━━━━━━━━━━", value="These assignments are still open:", inline=False)
             for assignment in active_assignments:
                 embed.add_field(name=f"📌 {assignment.name} (#{assignment.id})", 
-                                value=format_assignment(assignment, "active"), inline=False)
+                                value=format_assignment(assignment, "active", now=now), inline=False)
             if past_assignments:
                 embed.add_field(name="\u200b", value="━━━━━━━━━━━━━━━━", inline=False)  # Separator
 
@@ -347,7 +347,7 @@ class ServerAssignmentManager:
             embed.add_field(name="🕒 **Past Assignments**\n━━━━━━━━━━━━━━━━", value="These assignments were not submitted on time:", inline=False)
             for assignment in past_assignments:
                 embed.add_field(name=f"🕒 {assignment.name} (#{assignment.id})", 
-                                value=format_assignment(assignment, "past", completed=False), inline=False)
+                                value=format_assignment(assignment, "past", now=now, completed=False), inline=False)
 
         # Footer
         embed.set_footer(text="⚡ Stay organized and keep up the great work!", 
@@ -395,7 +395,7 @@ class ServerAssignmentManager:
             embed.add_field(name="📌 **Active Assignments**\n━━━━━━━━━━━━━━━━", value="These assignments are still open:", inline=False)
             for assignment in active_assignments:
                 embed.add_field(name=f"📌 {assignment.name} (#{assignment.id})", 
-                                value=format_assignment(assignment, "active"), inline=False)
+                                value=format_assignment(assignment, "active", now=now), inline=False)
             embed.add_field(name="\u200b", value="━━━━━━━━━━━━━━━━", inline=False)  # Separator
         
         # Add Completed Assignments
@@ -403,7 +403,7 @@ class ServerAssignmentManager:
             embed.add_field(name="✅ **Completed Assignments**\n━━━━━━━━━━━━━━━━", value="You’ve finished these assignments:", inline=False)
             for assignment in completed_assignments:
                 embed.add_field(name=f"✅ {assignment.name} (#{assignment.id})", 
-                                value=format_assignment(assignment, "completed"), inline=False)
+                                value=format_assignment(assignment, "completed", now=now), inline=False)
             if past_assignments:
                 embed.add_field(name="\u200b", value="━━━━━━━━━━━━━━━━", inline=False)  # Separator
         
@@ -412,7 +412,7 @@ class ServerAssignmentManager:
             embed.add_field(name="🕒 **Past Assignments**\n━━━━━━━━━━━━━━━━", value="These assignments were not submitted on time:", inline=False)
             for assignment in past_assignments:
                 embed.add_field(name=f"🕒 {assignment.name} (#{assignment.id})", 
-                                value=format_assignment(assignment, "past", completed=True), inline=False)
+                                value=format_assignment(assignment, "past", now=now, completed=True), inline=False)
         
         # Footer
         embed.set_footer(text="⚡ Stay organized and submit on time!", icon_url="https://cdn-icons-png.flaticon.com/512/1828/1828640.png")
@@ -657,15 +657,15 @@ class AssignmentTracker(commands.Cog):
             await msg.edit(embed=manager.get_personal_assignments_embed(ctx.author.id, include_completed=modifier=='all'))
     
     @commands.slash_command(name='listmine')
-    @discord.option("mode", choices=["Todo", "All"], default="Todo", description="View only todo or view all of your assignments", required=False)
+    @discord.option("include_completed", input_type=bool, default=False, description="View only todo or view all of your assignments", required=False)
     @has_been_setup()
-    async def list_personal_assignments_slash(self, ctx: discord.ApplicationContext, mode: str = "Todo"):
+    async def list_personal_assignments_slash(self, ctx: discord.ApplicationContext, include_completed: str = False):
         """Lists your assignments, visible only to yourself."""
         manager = self.get_manager(ctx.guild.id)
-        response = await ctx.respond(embed=manager.get_personal_assignments_embed(ctx.author.id, mode=='All'), ephemeral=True)
+        response = await ctx.respond(embed=manager.get_personal_assignments_embed(ctx.author.id, include_completed), ephemeral=True)
         for _ in range(10):
             await asyncio.sleep(1)
-            await response.edit(embed=manager.get_personal_assignments_embed(ctx.author.id, include_completed=mode=='all'))
+            await response.edit(embed=manager.get_personal_assignments_embed(ctx.author.id, include_completed))
     
     @commands.command(aliases=['completed', 'done'])
     @has_been_setup()
