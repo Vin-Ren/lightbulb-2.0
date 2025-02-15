@@ -259,7 +259,7 @@ class ServerAssignmentManager:
         assignment = Assignment(_id=self.last_assignment_id, name=name, groups=groups, deadline=datetime.strptime(deadline, DATETIME_FORMAT), link=link)
         # assume this assignment's deadline is within this year
         assignment.deadline = assignment.deadline.replace(year=datetime.now().year) 
-        if len(assignment.link) and not assignment.startswith('http'):
+        if len(assignment.link) and not assignment.link.startswith('http'):
             assignment = 'https://'+assignment
         for group in groups:
             self.group_assignments[group].add(assignment.id)
@@ -547,6 +547,7 @@ class AssignmentTracker(commands.Cog):
     
     @commands.command(aliases=['trackerchannel', 'setup'])
     async def bind_tracker_announcer_channel(self, ctx: commands.Context, channel: discord.TextChannel = None):
+        """Setup and sets a tracker channel for dashboard and reminders."""
         if channel==None:
             channel = ctx.channel
         if str(ctx.guild.id) not in self.assignments_by_server:
@@ -559,6 +560,7 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['listgroups'])
     @has_been_setup()
     async def list_groups(self, ctx: commands.Context):
+        """Lists all group"""
         manager = self.get_manager(ctx.guild.id)
         groups_str = "\n".join([str(idx+1)+". "+str(group) for idx, group in enumerate(manager.groups)])
         await ctx.send(f"Groups:\n{groups_str}")
@@ -566,6 +568,7 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['creategroup'])
     @has_been_setup()
     async def create_group(self, ctx: commands.Context, group_name: str):
+        """Creates a group"""
         if ',' in group_name:
             return await ctx.send("Group names must not contain commas.")
         manager = self.get_manager(ctx.guild.id)
@@ -576,6 +579,7 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['deletegroup'])
     @has_been_setup()
     async def delete_group(self, ctx: commands.Context, group_name: str):
+        """Deletes a group, this action is irreversible."""
         manager = self.get_manager(ctx.guild.id)
         if manager.delete_group(group_name):
             return await ctx.send(f"Successfully removed group<{group_name.upper()}>")
@@ -584,6 +588,7 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['getsubscribed'])
     @has_been_setup()
     async def get_subscribed(self, ctx: commands.Context):
+        """Gets the groups you are currently subscribed to."""
         manager = self.get_manager(ctx.guild.id)
         subscriptions = manager.get_subscribed(ctx.author.id)
         await ctx.send(f"You are subscribed to: {humanize.natural_list(subscriptions) if subscriptions else 'No one'}.")
@@ -591,6 +596,7 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['subscribe'])
     @has_been_setup()
     async def subscribe_group(self, ctx: commands.Context, *, group_names: str):
+        """Unsubscribe from a set of groups, seperated by space"""
         manager = self.get_manager(ctx.guild.id)
         groups = [e for e in group_names.upper().split(' ') if len(e)>0]
         successful = []
@@ -602,6 +608,7 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['unsubscribe'])
     @has_been_setup()
     async def unsubscribe_group(self, ctx: commands.Context, *, group_names: str):
+        """Unsubscribe from a set of groups, seperated by space"""
         manager = self.get_manager(ctx.guild.id)
         groups = [e for e in group_names.upper().split(' ') if len(e)>0]
         successful = []
@@ -613,6 +620,7 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['listall', 'listallassign'])
     @has_been_setup()
     async def list_all_assignments(self, ctx: commands.Context):
+        """Lists all assignments, visible to everyone."""
         manager = self.get_manager(ctx.guild.id)
         msg = await ctx.send(embed=manager.get_all_assignments_embed())
         for _ in range(10):
@@ -622,6 +630,7 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['listmine', 'listmyassign'])
     @has_been_setup()
     async def list_personal_assignments(self, ctx: commands.Context, modifier: Literal['all', ''] = ''):
+        """Lists your assignments, visible to everyone."""
         manager = self.get_manager(ctx.guild.id)
         msg = await ctx.send(embed=manager.get_personal_assignments_embed(ctx.author.id, include_completed=modifier=='all'))
         for _ in range(10):
@@ -642,6 +651,7 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['completed', 'done'])
     @has_been_setup()
     async def checklist_assignment(self, ctx: commands.Context, assignment_id: str):
+        """Marks an assignment as done."""
         manager = self.get_manager(ctx.guild.id)
         if manager.checklist_assignment(ctx.author.id, assignment_id):
             return await ctx.send(f"Nicely done <@{ctx.author.id}>! :fire: :fire: :fire:")
@@ -649,8 +659,8 @@ class AssignmentTracker(commands.Cog):
     
     @commands.slash_command(name='markasdone')
     @has_been_setup()
-    async def checklist_assignment(self, ctx: discord.ApplicationContext, assignment_id: str):
-        """Marks an assignment as done."""
+    async def checklist_assignment_slash(self, ctx: discord.ApplicationContext, assignment_id: str):
+        """Marks an assignment as done. Visible only to you."""
         manager = self.get_manager(ctx.guild.id)
         if manager.checklist_assignment(ctx.author.id, assignment_id):
             return await ctx.respond(f"Nicely done <@{ctx.author.id}>! :fire: :fire: :fire:", ephemeral=True)
@@ -659,6 +669,7 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['incompleted', 'incomplete', 'undone'])
     @has_been_setup()
     async def unchecklist_assignment(self, ctx: commands.Context, assignment_id: str):
+        """Unchecklist an assignment by its id."""
         manager = self.get_manager(ctx.guild.id)
         if manager.unchecklist_assignment(ctx.author.id, assignment_id):
             return await ctx.send(f"Bruh, ok tho. -1 aura")
@@ -667,6 +678,7 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['getassignment', 'getdetail', 'details'])
     @has_been_setup()
     async def get_assignment(self, ctx: commands.Context, assignment_id: str):
+        """Gets an assignment's details."""
         manager = self.get_manager(ctx.guild.id)
         assignment = manager.assignments.get(assignment_id, None)
         if assignment is None:
@@ -676,6 +688,11 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['createassignment', 'add', 'create'])
     @has_been_setup()
     async def add_assignment(self, ctx: commands.Context, name: str, groups: str = "", deadline: str = "", link: str = ""):
+        """Creates an assignment with given attributes. 
+        Every attribute is seperated by space, every group is seperated by commas, 
+        and the deadline format is: "%d-%mT%H:%M%z". 
+        Example of a correctly formatted deadline for 17.00 at 20th february is '20-02T17:00+0700'.
+        """
         manager = self.get_manager(ctx.guild.id)
         assignment = manager.create_assignment(name, groups, deadline, link)
         await ctx.send(f"Successfully created Assignment#{assignment.id}:\n" + str(assignment))
@@ -683,6 +700,7 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['edit'])
     @has_been_setup()
     async def edit_assignment(self, ctx: commands.Context, assignment_id: str, field: Literal['name', 'deadline', 'groups', 'link'], value: str):
+        """Edits an assignment's fields' value. Editable fields: name, deadline, groups, and link."""
         manager = self.get_manager(ctx.guild.id)
         if manager.edit_assignment(assignment_id, field, value):
             await ctx.send(f"Successfully edited Assignment#{assignment_id}!\n")
@@ -692,6 +710,7 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['deleteassignment', 'delete'])
     @has_been_setup()
     async def delete_assignment(self, ctx: commands.Context, assignment_id: str):
+        """Deletes an assignment. This action cannot be undone."""
         manager = self.get_manager(ctx.guild.id)
         deleted_assignment = manager.delete_assignment(assignment_id)
         if deleted_assignment is not None:
@@ -701,6 +720,7 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['archiveassignment', 'archive'])
     @has_been_setup()
     async def archive_assignment(self, ctx: commands.Context, assignment_id: str):
+        """Archiving an assignment manually. Assignments gets archived automatically after its deadline."""
         manager = self.get_manager(ctx.guild.id)
         if manager.archive_assignment(assignment_id):
             return await ctx.send(f"Successfully archived Assignment#{assignment_id}!")
@@ -709,6 +729,7 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['toggledashboard'])
     @has_been_setup()
     async def toggle_dashboard_message(self, ctx: commands.Context):
+        """Toggles dashboard message on and off. This is off by default."""
         manager = self.get_manager(ctx.guild.id)
         await self.fix_dashboard_message(ctx.guild.id)
         manager.toggle_dashboard()
