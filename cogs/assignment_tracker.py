@@ -195,6 +195,9 @@ class ServerAssignmentManager:
             self.assignments[assignment_id].groups.remove(group_name)
         return True
     
+    def get_subscribed(self, user_id: str):
+        return self.subscriptions.get(user_id, set())
+    
     def subscribe(self, user_id: str, group_name: str):
         group_name = group_name.upper()
         if group_name not in self.groups:
@@ -360,7 +363,7 @@ class ServerAssignmentManager:
         past_assignments = list(self.past_assignments.values())  # Already completed & past deadline
 
         # Split active & completed
-        for assignment in self.assignments.values():
+        for assignment in self.get_personal_assignments(include_completed=include_completed):
             if str(assignment.id) in self.user_checklist.get(user_id, set()):
                 completed_assignments.append(assignment)
             else:
@@ -448,7 +451,7 @@ class AssignmentTracker(commands.Cog):
     
     @tasks.loop(minutes=30)
     async def auto_archive_assignments(self):
-        print(f"Archiving now... {datetime.now().isoformat()}")
+        # print(f"Archiving now... {datetime.now().isoformat()}")
         for manager in self.assignments_by_server.values():
             archivable_ids = []
             for assignment in manager.assignments.values():
@@ -462,7 +465,7 @@ class AssignmentTracker(commands.Cog):
     
     @tasks.loop(hours=6)
     async def refresh_dashboard(self):
-        print(f"Refreshing dashboard... {datetime.now().isoformat()}")
+        # print(f"Refreshing dashboard... {datetime.now().isoformat()}")
         for manager in self.assignments_by_server.values():
             try:
                 if manager.disable_dasboard:
@@ -476,14 +479,10 @@ class AssignmentTracker(commands.Cog):
                         await message.delete()
             except (discord.errors.NotFound, ValueError):
                 pass
-            new_message = await channel.send(manager.get_dashboard_message())
-            # new_message = await channel.send(embed=manager.get_assignments_embed())
-            manager.dashboard_message_id = new_message.id
-        # self.synchronize_dashboard.start()
     
     @tasks.loop(seconds=5)
     async def synchronize_dashboard(self):
-        print(f"Synchronizing dashboard... {datetime.now().isoformat()}")
+        # print(f"Synchronizing dashboard... {datetime.now().isoformat()}")
         for manager in self.assignments_by_server.values():
             try:
                 if manager.disable_dasboard:
@@ -582,6 +581,13 @@ class AssignmentTracker(commands.Cog):
             return await ctx.send(f"Successfully removed group<{group_name.upper()}>")
         await ctx.send(f"Group<{group_name.upper()}> does not exist.")
     
+    @commands.command(aliases=['getsubscribed'])
+    @has_been_setup()
+    async def get_subscribed(self, ctx: commands.Context):
+        manager = self.get_manager(ctx.guild.id)
+        subscriptions = manager.get_subscribed(ctx.author.id)
+        await ctx.send(f"You are subscribed to: {humanize.natural_list(subscriptions) if subscriptions else 'No one'}.")
+    
     @commands.command(aliases=['subscribe'])
     @has_been_setup()
     async def subscribe_group(self, ctx: commands.Context, *, group_names: str):
@@ -641,7 +647,7 @@ class AssignmentTracker(commands.Cog):
             return await ctx.send(f"Nicely done <@{ctx.author.id}>! :fire: :fire: :fire:")
         await ctx.send(f"No-uh, Can't do that.")
     
-    @commands.slash_command(aliases=['markasdone'])
+    @commands.slash_command(name='markasdone')
     @has_been_setup()
     async def checklist_assignment(self, ctx: discord.ApplicationContext, assignment_id: str):
         """Marks an assignment as done."""
