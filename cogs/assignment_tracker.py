@@ -660,12 +660,12 @@ class AssignmentTracker(commands.Cog):
             return await ctx.send(f"Successfully archived Assignment#{assignment_id}!")
         await ctx.send(f"Failed to archive assignment.")
     
-    @commands.command(aliases=['toggle_dashboard'])
+    @commands.command(aliases=['toggledashboard'])
     @has_been_setup()
     async def toggle_dashboard_message(self, ctx: commands.Context):
         manager = self.get_manager(ctx.guild.id)
-        manager.toggle_dashboard()
         await ctx.send(embed=get_toggle_message("Dashboard message", not manager.disable_dasboard))
+        manager.toggle_dashboard()
     
     @commands.command(aliases=['forcesave'])
     @has_been_setup()
