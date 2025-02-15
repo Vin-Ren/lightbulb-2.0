@@ -1,5 +1,5 @@
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from typing import Literal
 
@@ -43,7 +43,7 @@ def timedelta_to_human(td: timedelta) -> str:
 
 
 # Helper function to format assignments
-def format_assignment(assignment, status_emoji, now: datetime = datetime.now(tz=UTC), completed=True):
+def format_assignment(assignment, status_emoji, now: datetime = datetime.now(tz=timezone.utc), completed=True):
     deadline_str = assignment.deadline.strftime("%A, %d %B %Y at %I:%M %p")
     time_left = timedelta_to_human(assignment.deadline - now)
 
@@ -88,7 +88,7 @@ class Assignment:
         embed.add_field(name="📂 **Assigned Groups**", value=assigned_groups, inline=False)
 
         # Deadline Formatting
-        time_left = timedelta_to_human(self.deadline - datetime.now(tz=UTC))
+        time_left = timedelta_to_human(self.deadline - datetime.now(tz=timezone.utc))
         deadline_str = self.deadline.strftime("%A, %d %B %Y at %I:%M %p")  # Example: Monday, 10 March 2025 at 11:59 PM
         embed.add_field(name="⏳ **Deadline**", value=f"🕒 {deadline_str}\n⚡ **{time_left} remaining!**", inline=False)
 
@@ -287,7 +287,7 @@ class ServerAssignmentManager:
         self.past_assignments[assignment_id]=assignment
     
     def get_all_assignments_embed(self):
-        now = datetime.now(tz=UTC)
+        now = datetime.now(tz=timezone.utc)
 
         # Categorize assignments
         active_assignments = list(self.assignments.values())  # Assignments still due
@@ -336,7 +336,7 @@ class ServerAssignmentManager:
 
     def get_personal_assignments_embed(self, user_id: str, include_completed=False):
         user_id = str(user_id)
-        now = datetime.now(tz=UTC)  
+        now = datetime.now(tz=timezone.utc)  
 
         # Assignments categorization
         active_assignments = []
@@ -393,7 +393,7 @@ class ServerAssignmentManager:
         dashboard_message = "## 📚 **Active Assignments**"
         critical_time = False
         for assignment in assignments_sorted_by_deadline:
-            timeleft = assignment.deadline-datetime.now(tz=UTC)
+            timeleft = assignment.deadline-datetime.now(tz=timezone.utc)
             timeleft_str = timedelta_to_human(timeleft)
             if (timeleft<timedelta(days=1)):
                 timeleft_str = f"⚠️ **{timeleft_str[:-5]} LEFT!** "
