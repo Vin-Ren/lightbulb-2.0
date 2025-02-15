@@ -12,6 +12,10 @@ class MultiWritePipe:
         for pipe in self.target_pipes:
             pipe.flush()
     
+    def __str__(self):
+        pipeString = ", ".join([str(pipe) for pipe in self.target_pipes])
+        return "<MultiWritePipe pipes=[%s]>" % pipeString
+    
     @property
     def closed(self):
         is_closed=0
@@ -26,7 +30,7 @@ class MultiWritePipe:
     def writelines(self, __lines: Iterable[str]):
         for pipe in self.target_pipes:
             pipe.writelines(__lines)
-            
+
     def seek(self, __cookie: int, __whence: int = 0):
         for pipe in self.target_pipes:
             pipe.seek(__cookie, __whence)
@@ -36,7 +40,7 @@ class PrettyPrinter:
     _PRINTERS = []
     _DEFAULT_PRINTER = None
     
-    def __new__(cls):
+    def __new__(cls, *args, **kwargs):
         instance = super().__new__(cls)
         cls._PRINTERS.append(instance)
         return instance

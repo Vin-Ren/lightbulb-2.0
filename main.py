@@ -5,11 +5,14 @@ from bot import setup
 
 
 def main(development):
-    bot = setup(os.environ) #type:ignore
+    bot = setup(os.environ, development) #type:ignore
     token = os.getenv("TOKEN")
     if development:
+        print("Running in development mode...")
         bot.cogs['Core'].set_presence = bot.cogs['Core'].maintenance_presence
         token = os.getenv("DEV_TOKEN")
+    else:
+        print("Running production...")
     bot.run(token)
 
 

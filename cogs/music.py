@@ -6,9 +6,11 @@ import discord
 from discord.ext import commands, pages, bridge
 from utils.downloader import YTDLSource
 
+from bot import Bot
+
 
 class QueueManager:
-    def __init__(self, bot: commands.Bot, voice_channel: discord.VoiceClient, recent_ctx: commands.Context):
+    def __init__(self, bot: Bot, voice_channel: discord.VoiceClient, recent_ctx: commands.Context):
         self.queue: list[YTDLSource] = []
         self.bot = bot
         self._index = 0
@@ -120,7 +122,7 @@ class QueueManager:
 
 
 class MusicQueue(commands.Cog):
-    def __init__(self, bot_: commands.Bot):
+    def __init__(self, bot_: Bot):
         self.bot = bot_
         self.queue_managers: dict[int, QueueManager] = {}
     
@@ -286,7 +288,7 @@ class MusicQueue(commands.Cog):
 
 
 class Music(commands.Cog):
-    def __init__(self, bot_: commands.Bot):
+    def __init__(self, bot_: Bot):
         self.bot = bot_
         self.auto_disconnect_timeout = 15*60
         self.task_interval = 60

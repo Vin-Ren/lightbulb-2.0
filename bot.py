@@ -14,7 +14,7 @@ class Bot(commands.Bot):
         self.PRINTER = printer
 
 
-def setup(config: dict):
+def setup(config: dict, development_mode=False):
     config.setdefault("LOG_FILE", 'logs.log')
     config.setdefault("COGS_DIR", 'cogs')
     try:
@@ -23,8 +23,13 @@ def setup(config: dict):
         with open(config["LOG_FILE"], 'w') as f:
             pass
     
-    printer = PrettyPrinter()
-    printer.target_pipe=MultiWritePipe(open(config["LOG_FILE"]), sys.stdout)
+    target_pipe=MultiWritePipe(open(config["LOG_FILE"], 'w', encoding='utf-8'), sys.stdout)
+    printer = PrettyPrinter(debug=development_mode, target_pipe=target_pipe)
+    
+    printer.print_debug("Printer Init", {
+        'pipes': target_pipe,
+        "debug": printer.debug
+    })
     
     intents = discord.Intents.default()
     intents.message_content = True

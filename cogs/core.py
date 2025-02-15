@@ -3,6 +3,8 @@ import discord
 from discord.ext import commands
 from discord import Embed, Status, Activity, ActivityType
 
+from bot import Bot
+
 
 def format_duration(duration: int):
     duration, seconds = divmod(duration, 60)
@@ -15,7 +17,7 @@ def format_duration(duration: int):
 
 
 class Core(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
         self.start = round(time.time())
         self.set_presence = self.normal_presence
@@ -28,8 +30,7 @@ class Core(commands.Cog):
     
     @commands.Cog.listener()
     async def on_ready(self):
-        print("Connection Established.")
-        print(f"{f'Connected As [{self.bot.user.name}]':^25}\n")
+        self.bot.PRINTER.print("Bot", {'status': 'Connected', 'connected-as':self.bot.user.name})
         await self.set_presence()
 
     def get_info_embed(self, ctx):
