@@ -152,7 +152,18 @@ class ServerAssignmentManager:
         if assignment_id not in self.assignments:
             return False
         self.user_checklist[user_id] = self.user_checklist.get(user_id, set())
+        if assignment_id in self.user_checklist[user_id]:
+            return False
         self.user_checklist[user_id].add(assignment_id)
+        return True
+
+    def unchecklist_assignment(self, user_id: str, assignment_id: str):
+        user_id = str(user_id)
+        assignment_id = str(assignment_id)
+        self.user_checklist[user_id] = self.user_checklist.get(user_id, set())
+        if assignment_id not in self.user_checklist[user_id]:
+            return False
+        self.user_checklist[user_id].remove(assignment_id)
         return True
     
     def create_assignment(self, name: str, groups: str, deadline: str, link: str):
@@ -195,10 +206,17 @@ class ServerAssignmentManager:
     
     def delete_assignment(self, assignment_id: str):
         if assignment_id not in self.assignments:
-            return 
+            return
         for group in self.assignments[assignment_id].groups:
             self.group_assignments[group].remove(assignment_id)
         return self.assignments.pop(assignment_id)
+
+    def archive_assignment(self, assignment_id: str):
+        if assignment_id not in self.assignments:
+            return False
+        assignment = self.assignments[assignment_id]
+        self.delete_assignment(assignment_id)
+        self.past_assignments[assignment_id]=assignment
 
 
 class AssignmentTracker(commands.Cog):
@@ -311,6 +329,14 @@ class AssignmentTracker(commands.Cog):
             return await ctx.send(f"Nicely done <@{ctx.author.id}>! :fire: :fire: :fire:")
         await ctx.send(f"No-uh, Can't do that.")
     
+    @commands.command(aliases=['incompleted', 'incomplete', 'undone'])
+    @has_been_setup()
+    async def unchecklist_assignment(self, ctx: commands.Context, assignment_id: str):
+        manager = self.get_manager(ctx.guild.id)
+        if manager.unchecklist_assignment(ctx.author.id, assignment_id):
+            return await ctx.send(f"Bruh, ok tho. -1 aura")
+        await ctx.send(f"What are you trying to do?")
+    
     @commands.command(aliases=['getassignment', 'getdetail', 'details'])
     @has_been_setup()
     async def get_assignment(self, ctx: commands.Context, assignment_id: str):
@@ -320,7 +346,7 @@ class AssignmentTracker(commands.Cog):
             return await ctx.send("That assignment does not exists.")
         await ctx.send(embed=assignment.get_embed())
     
-    @commands.command(aliases=['createassignment', 'add'])
+    @commands.command(aliases=['createassignment', 'add', 'create'])
     @has_been_setup()
     async def add_assignment(self, ctx: commands.Context, name: str, groups: str = "", deadline: str = "", link: str = ""):
         manager = self.get_manager(ctx.guild.id)
@@ -334,15 +360,35 @@ class AssignmentTracker(commands.Cog):
         if manager.edit_assignment(assignment_id, field, value):
             await ctx.send(f"Successfully edited Assignment#{assignment_id}!\n")
             return await ctx.send(embed=manager.assignments[assignment_id].get_embed())
-        await ctx.send(f"Failed to edit Assignment#{assignment_id}")
+        await ctx.send(f"Failed to delete assignment")
+    
+    @commands.command(aliases=['deleteassignment', 'delete'])
+    @has_been_setup()
+    async def delete_assignment(self, ctx: commands.Context, assignment_id: str):
+        manager = self.get_manager(ctx.guild.id)
+        deleted_assignment = manager.delete_assignment(assignment_id)
+        if deleted_assignment is not None:
+            return await ctx.send(f"Successfully deleted Assignment#{assignment_id}!")
+        await ctx.send(f"Failed to delete assignment.")
+    
+    @commands.command(aliases=['archiveassignment', 'archive'])
+    @has_been_setup()
+    async def archive_assignment(self, ctx: commands.Context, assignment_id: str):
+        manager = self.get_manager(ctx.guild.id)
+        if manager.archive_assignment(assignment_id):
+            return await ctx.send(f"Successfully archived Assignment#{assignment_id}!")
+        await ctx.send(f"Failed to archive assignment.")
     
     @bind_tracker_announcer_channel.after_invoke
     @create_group.after_invoke
     @delete_group.after_invoke
     @subscribe_group.after_invoke
     @checklist_assignment.after_invoke
+    @unchecklist_assignment.after_invoke
     @add_assignment.after_invoke
     @edit_assignment.after_invoke
+    @delete_assignment.after_invoke
+    @archive_assignment.after_invoke
     async def save_after_action(self, ctx: commands.Context):
         self.save()
     
@@ -351,9 +397,12 @@ class AssignmentTracker(commands.Cog):
     @delete_group.error
     @subscribe_group.error
     @checklist_assignment.error
+    @unchecklist_assignment.error
     @get_assignment.error
     @add_assignment.error
     @edit_assignment.error
+    @delete_assignment.error
+    @archive_assignment.error
     async def error_handler(self, ctx: commands.Context, error: discord.DiscordException):
         print(error, type(error))
         if isinstance(error, discord.ext.commands.errors.CheckFailure):
