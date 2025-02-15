@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 import json
 from typing import Literal
@@ -39,6 +40,26 @@ def timedelta_to_human(td: timedelta) -> str:
     ])
 
     return " ".join(parts) + " left"
+
+
+# Helper function to format assignments
+def format_assignment(assignment, status_emoji, now: datetime = datetime.now(tz=UTC), completed=True):
+    deadline_str = assignment.deadline.strftime("%A, %d %B %Y at %I:%M %p")
+    time_left = timedelta_to_human(assignment.deadline - now)
+
+    text = (
+        f"📂 **Subject:** {humanize.natural_list(assignment.groups)}\n"
+        f"⏳ **Deadline:** {deadline_str}\n"
+    )
+    if status_emoji!="🕒":
+        text+=f"⚡ **{time_left} remaining!**"
+    elif completed:
+        text+=f"✅ **Completed**"
+    else:
+        text+=f"🚨 **Missed Deadline**"
+    if assignment.link:
+        text += f"\n🔗 **[Resource]({assignment.link})**"
+    return f"{status_emoji} **{assignment.name} (#{assignment.id})**\n{text}\n"
 
 
 class Assignment:
@@ -263,6 +284,108 @@ class ServerAssignmentManager:
         self.delete_assignment(assignment_id)
         self.past_assignments[assignment_id]=assignment
     
+    def get_all_assignments_embed(self):
+        now = datetime.now(tz=UTC)
+
+        # Categorize assignments
+        active_assignments = list(self.assignments.values())  # Assignments still due
+        past_assignments = list(self.past_assignments.values())  # Assignments past deadline
+
+        # Determine urgency color (based on most urgent active assignment)
+        most_urgent_time = timedelta.max if active_assignments else timedelta(days=1000)
+        for assignment in active_assignments:
+            time_remaining = assignment.deadline - now
+            if time_remaining < most_urgent_time:
+                most_urgent_time = time_remaining
+
+        embed_color = (
+            discord.Color.red() if most_urgent_time <= timedelta(hours=24) else
+            discord.Color.orange() if most_urgent_time <= timedelta(days=3) else
+            discord.Color.green()
+        )
+
+        # Create embed
+        embed = discord.Embed(
+            title="📚 All Assignments Overview",
+            description="Here's the status of all assignments!",
+            color=embed_color
+        )
+
+        # Add active assignments
+        if active_assignments:
+            embed.add_field(
+                name="📌 **Active Assignments**",
+                value="\n".join(format_assignment(a, "📌", now) for a in active_assignments),
+                inline=False
+            )
+
+        # Add past assignments
+        if past_assignments:
+            embed.add_field(
+                name="🕒 **Past Assignments**",
+                value="\n".join(format_assignment(a, "🕒", completed=False) for a in past_assignments),
+                inline=False
+            )
+
+        # Footer
+        embed.set_footer(text="⚡ Stay organized and submit on time!", icon_url="https://cdn-icons-png.flaticon.com/512/1828/1828640.png")
+
+        return embed
+
+    def get_personal_assignments_embed(self, user_id: str, include_completed=False):
+        user_id = str(user_id)
+        now = datetime.now(tz=UTC)  
+
+        # Assignments categorization
+        active_assignments = []
+        completed_assignments = []
+        past_assignments = list(self.past_assignments.values())  # Already completed & past deadline
+
+        # Split active & completed
+        for assignment in self.assignments.values():
+            if str(assignment.id) in self.user_checklist.get(user_id, set()):
+                completed_assignments.append(assignment)
+            else:
+                active_assignments.append(assignment)
+
+        # Determine urgency color
+        most_urgent_time = timedelta.max if active_assignments else timedelta(days=1000)
+        for assignment in active_assignments:
+            time_remaining = assignment.deadline - now
+            if time_remaining < most_urgent_time:
+                most_urgent_time = time_remaining
+
+        embed_color = (
+            discord.Color.red() if most_urgent_time <= timedelta(hours=24) else
+            discord.Color.orange() if most_urgent_time <= timedelta(days=3) else
+            discord.Color.green()
+        )
+
+        # Create embed
+        embed = discord.Embed(
+            title="📚 Assignments Overview",
+            description="Here's your assignment breakdown! ⚡",
+            color=embed_color
+        )
+
+        # Add active assignments
+        if active_assignments:
+            embed.add_field(name="📌 **Active Assignments**", value="\n".join(format_assignment(a, "📌", now) for a in active_assignments), inline=False)
+
+        # Add completed assignments
+        if include_completed and completed_assignments:
+            embed.add_field(name="✅ **Completed Assignments**", value="\n".join(format_assignment(a, "✅", now) for a in completed_assignments), inline=False)
+
+        # Add past assignments
+        if past_assignments:
+            embed.add_field(name="🕒 **Past Assignments**", value="\n".join(format_assignment(a, "🕒", completed=True) for a in past_assignments), inline=False)
+
+        # Footer
+        embed.set_footer(text="⚡ Stay organized and submit on time!", icon_url="https://cdn-icons-png.flaticon.com/512/1828/1828640.png")
+
+        return embed
+
+    
     def get_dashboard_message(self):
         assignments_sorted_by_deadline = sorted([e for e in self.assignments.values()], key=lambda e:e.deadline)
         dashboard_message = "## 📚 **Active Assignments**"
@@ -275,14 +398,11 @@ class ServerAssignmentManager:
                 critical_time = True
             current_section = [f"📝 **Assignment {assignment.name}**",
                                f"📂 *Subject:* {humanize.lists.natural_list(assignment.groups)}",
-                               f"⏳ *Deadline:* {assignment.deadline.strftime("%Y-%m-%d %H:%M")}",
+                               f"⏳ *Deadline:* {assignment.deadline.strftime("%A, %d %B %Y at %I:%M %p")}",
                                f"⏲ *Time Left:* {timeleft_str}"]
             current_section_str = '\n'.join(current_section)
             dashboard_message+='\n\n═══════════════════════\n'+current_section_str
-        # res = "# Active Assignments:\n"+'\n'.join(['## '+str(e) for e in assignments_sorted_by_deadline])
-        # res+='\n'+datetime.now().isoformat()
-        # for assignment in assignments_sorted_by_deadline:
-        #     res+=str(assignment)+'\n'
+
         if critical_time:
             dashboard_message+="\n\n\n⚠️ **Note:** Assignments with less than **1 day** left are marked as ⚠️ **URGENT!**"
         return dashboard_message
@@ -330,6 +450,7 @@ class AssignmentTracker(commands.Cog):
                 if message is not None:
                     await message.delete()
             new_message = await channel.send(manager.get_dashboard_message())
+            # new_message = await channel.send(embed=manager.get_assignments_embed())
             manager.dashboard_message_id = new_message.id
         # self.synchronize_dashboard.start()
     
@@ -346,6 +467,7 @@ class AssignmentTracker(commands.Cog):
                 message = await channel.fetch_message(int(manager.dashboard_message_id))
                 if message is not None:
                     await message.edit(content=manager.get_dashboard_message())
+                    # await message.edit(embed=manager.get_assignments_embed())
             except discord.errors.NotFound:
                 continue
     
@@ -427,15 +549,19 @@ class AssignmentTracker(commands.Cog):
     @has_been_setup()
     async def list_all_assignments(self, ctx: commands.Context):
         manager = self.get_manager(ctx.guild.id)
-        assignment_str = "\n".join([str(e) for e in manager.get_all_assignments()])
-        await ctx.send(f"All Assignments:\n"+assignment_str)
+        msg = await ctx.send(embed=manager.get_all_assignments_embed())
+        for _ in range(10):
+            await asyncio.sleep(1)
+            await msg.edit(embed=manager.get_all_assignments_embed())
     
     @commands.command(aliases=['listmine', 'listmyassign'])
     @has_been_setup()
     async def list_personal_assignments(self, ctx: commands.Context, modifier: Literal['all', ''] = ''):
         manager = self.get_manager(ctx.guild.id)
-        assignment_str = "\n".join([str(e) for e in manager.get_personal_assignments(str(ctx.author.id), modifier=='all')])
-        await ctx.send(f"Your Assignments:\n"+assignment_str)
+        msg = await ctx.send(embed=manager.get_personal_assignments_embed(ctx.author.id, include_completed=modifier=='all'))
+        for _ in range(10):
+            await asyncio.sleep(1)
+            await msg.edit(embed=manager.get_personal_assignments_embed(ctx.author.id, include_completed=modifier=='all'))
     
     @commands.command(aliases=['completed', 'done'])
     @has_been_setup()

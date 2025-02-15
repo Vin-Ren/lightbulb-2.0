@@ -33,7 +33,7 @@ def setup(config: dict, development_mode=False):
     
     intents = discord.Intents.default()
     intents.message_content = True
-    bot = Bot(command_prefix=commands.when_mentioned_or("!"), intents=intents, printer=printer)
+    bot = Bot(command_prefix=commands.when_mentioned_or("~"), intents=intents, printer=printer)
     for _file in os.listdir(config["COGS_DIR"]):
         if _file.endswith(".py"):
             bot.load_extension(f"{config['COGS_DIR']}.{_file[:-3]}")
