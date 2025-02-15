@@ -138,7 +138,7 @@ class ServerAssignmentManager:
         self.group_assignments: dict[str, set[str]] = dict() # {group: [assigments]}
         self.user_checklist: dict[str, set[str]] = dict() # {user: [assignments]}
         self.last_assignment_id = 0
-        self.disable_dasboard = True
+        self.disable_dashboard = True
     
     @classmethod
     def from_dict(cls, data: dict):
@@ -152,7 +152,7 @@ class ServerAssignmentManager:
         obj.group_assignments = {group: set(entry) for group, entry in data['group_assignments'].items()}
         obj.user_checklist = {user: set(entry) for user, entry in data['user_checklist'].items()}
         obj.last_assignment_id = data['last_assignment_id']
-        obj.disable_dasboard = data['disable_dasboard']
+        obj.disable_dashboard = data['disable_dashboard']
         return obj
     
     def to_dict(self):
@@ -169,7 +169,7 @@ class ServerAssignmentManager:
             'group_assignments': {group: list(assignment_id) for group, assignment_id in self.group_assignments.items()},
             'user_checklist': {user: list(assignment_id) for user, assignment_id in self.user_checklist.items()},
             'last_assignment_id': self.last_assignment_id,
-            'disable_dasboard': self.disable_dasboard
+            'disable_dashboard': self.disable_dashboard
         }
     
     def create_group(self, group_name: str):
@@ -431,7 +431,7 @@ class ServerAssignmentManager:
         return dashboard_message
 
     def toggle_dashboard(self):
-        self.disable_dasboard^=1
+        self.disable_dashboard^=1
 
 
 class AssignmentTracker(commands.Cog):
@@ -471,7 +471,7 @@ class AssignmentTracker(commands.Cog):
         try:
             for manager in self.assignments_by_server.values():
                 try:
-                    if manager.disable_dasboard:
+                    if manager.disable_dashboard:
                         continue
                     channel = self.bot.get_channel(int(manager.announcer_channel_id))
                     if channel is None:
@@ -491,7 +491,7 @@ class AssignmentTracker(commands.Cog):
         try:
             for manager in self.assignments_by_server.values():
                 try:
-                    if manager.disable_dasboard:
+                    if manager.disable_dashboard:
                         continue
                     channel = self.bot.get_channel(int(manager.announcer_channel_id))
                     if channel is None:
@@ -508,7 +508,7 @@ class AssignmentTracker(commands.Cog):
     
     async def fix_dashboard_message(self, server_id: str):
         manager = self.get_manager(server_id)
-        if manager.disable_dasboard and manager.dashboard_message_id:
+        if manager.disable_dashboard and manager.dashboard_message_id:
             channel = self.bot.get_channel(int(manager.announcer_channel_id))
             if channel is None:
                 return
@@ -519,7 +519,7 @@ class AssignmentTracker(commands.Cog):
                         await message.delete()
                 except:
                     pass
-        elif not manager.disable_dasboard and not manager.dashboard_message_id:
+        elif not manager.disable_dashboard and not manager.dashboard_message_id:
             channel = self.bot.get_channel(int(manager.announcer_channel_id))
             if channel is None:
                 return
@@ -750,7 +750,7 @@ class AssignmentTracker(commands.Cog):
         manager = self.get_manager(ctx.guild.id)
         await self.fix_dashboard_message(ctx.guild.id)
         manager.toggle_dashboard()
-        await ctx.send(embed=get_toggle_message("Dashboard message", not manager.disable_dasboard))
+        await ctx.send(embed=get_toggle_message("Dashboard message", not manager.disable_dashboard))
     
     @commands.command(aliases=['forcesave'])
     @has_been_setup()
