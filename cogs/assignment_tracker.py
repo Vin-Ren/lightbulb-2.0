@@ -448,6 +448,7 @@ class AssignmentTracker(commands.Cog):
     
     @tasks.loop(minutes=30)
     async def auto_archive_assignments(self):
+        print(f"Archiving now... {datetime.now().isoformat()}")
         for manager in self.assignments_by_server.values():
             archivable_ids = []
             for assignment in manager.assignments.values():
@@ -461,7 +462,7 @@ class AssignmentTracker(commands.Cog):
     
     @tasks.loop(hours=6)
     async def refresh_dashboard(self):
-        # print("Refreshing dashboard")
+        print(f"Refreshing dashboard... {datetime.now().isoformat()}")
         for manager in self.assignments_by_server.values():
             try:
                 if manager.disable_dasboard:
@@ -482,7 +483,7 @@ class AssignmentTracker(commands.Cog):
     
     @tasks.loop(seconds=5)
     async def synchronize_dashboard(self):
-        # print("Syncing dashboard")
+        print(f"Synchronizing dashboard... {datetime.now().isoformat()}")
         for manager in self.assignments_by_server.values():
             try:
                 if manager.disable_dasboard:
