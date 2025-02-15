@@ -127,6 +127,7 @@ class ServerAssignmentManager:
     @classmethod
     def from_dict(cls, data: dict):
         obj = cls(data['server_id'], data['announcer_channel_id'], datetime.fromisoformat(data['tracked_since']))
+        obj.dashboard_message_id = data['dashboard_message_id']
         obj.assignments = {_id: Assignment.from_dict(entry) for _id, entry in data['assignments'].items()}
         obj.past_assignments = {_id: Assignment.from_dict(entry) for _id, entry in data['past_assignments'].items()}
         obj.groups = set(data['groups'])
@@ -142,6 +143,7 @@ class ServerAssignmentManager:
             'tracked_since': self.tracked_since.isoformat(),
             'server_id': self.server_id,
             'announcer_channel_id': self.announcer_channel_id,
+            'dashboard_message_id': self.dashboard_message_id,
             'assignments': {_id: assignment.to_dict() for _id, assignment in self.assignments.items()},
             'past_assignments': {_id: assignment.to_dict() for _id, assignment in self.past_assignments.items()},
             'groups': list(self.groups),
