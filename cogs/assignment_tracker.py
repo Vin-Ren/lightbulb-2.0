@@ -71,7 +71,7 @@ class Assignment:
         self.link = link
     
     def __str__(self):
-        return f"[#{self.id}] {','.join(self.groups)} - {self.name}. Deadline: {self.deadline.strftime("%a %H:%M, %d %b %y")}"
+        return f"[#{self.id}] {','.join(self.groups)} - {self.name}. Deadline: {self.deadline.strftime('%a %H:%M, %d %b %y')}"
 
     def get_relative_date(self):
         # TODO: fix
@@ -423,7 +423,7 @@ class AssignmentTracker(commands.Cog):
         self.refresh_dashboard.start()
         self.synchronize_dashboard.start()
     
-    @tasks.loop(minutes=30)
+    @tasks.loop(minutes=60)
     async def autosave_data(self):
         self.save()
     
@@ -456,7 +456,7 @@ class AssignmentTracker(commands.Cog):
             manager.dashboard_message_id = new_message.id
         # self.synchronize_dashboard.start()
     
-    @tasks.loop(seconds=1)
+    @tasks.loop(seconds=5)
     async def synchronize_dashboard(self):
         # print("Syncing dashboard")
         for manager in self.assignments_by_server.values():
