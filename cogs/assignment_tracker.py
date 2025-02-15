@@ -489,8 +489,6 @@ class AssignmentTracker(commands.Cog):
             try:
                 if manager.disable_dasboard:
                     continue
-                if manager.dashboard_message_id=="":
-                    continue
                 channel = self.bot.get_channel(int(manager.announcer_channel_id))
                 if channel is None:
                     continue
@@ -683,9 +681,9 @@ class AssignmentTracker(commands.Cog):
     @has_been_setup()
     async def toggle_dashboard_message(self, ctx: commands.Context):
         manager = self.get_manager(ctx.guild.id)
-        await ctx.send(embed=get_toggle_message("Dashboard message", not manager.disable_dasboard))
-        manager.toggle_dashboard()
         await self.fix_dashboard_message(ctx.guild.id)
+        manager.toggle_dashboard()
+        await ctx.send(embed=get_toggle_message("Dashboard message", not manager.disable_dasboard))
     
     @commands.command(aliases=['forcesave'])
     @has_been_setup()
