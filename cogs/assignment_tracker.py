@@ -121,7 +121,7 @@ class ServerAssignmentManager:
         self.subscriptions: dict[str, set[str]] = dict() # {user: [groups]}
         self.subscribers: dict[str, set[str]] = dict() # {group: [users]}
         self.group_assignments: dict[str, set[str]] = dict() # {group: [assigments]}
-        self.user_checklist: dict[str, set[str]] # {user: [assignments]}
+        self.user_checklist: dict[str, set[str]] = dict() # {user: [assignments]}
         self.last_assignment_id = 0
     
     @classmethod
