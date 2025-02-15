@@ -1,15 +1,44 @@
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 import json
 from typing import Literal
 
 import discord
 from discord.ext import commands, tasks
+import humanize
+import humanize.lists
 
 from bot import Bot
 
 
 SAVE_FILENAME = "assignments.json"
 DATETIME_FORMAT = "%d-%mT%H:%M%z"
+
+
+def timedelta_to_human(td: timedelta) -> str:
+    """Convert a timedelta to a human-readable string like '2 weeks 3 days 5 hours 10 minutes 30 seconds left'."""
+    weeks, remainder = divmod(td.total_seconds(), 604800)  # 1 week = 604800 seconds
+    days, remainder = divmod(remainder, 86400)   # 1 day = 86400 seconds
+    hours, remainder = divmod(remainder, 3600)   # 1 hour = 3600 seconds
+    minutes, seconds = divmod(remainder, 60)     # 1 minute = 60 seconds
+
+    # Helper function to handle pluralization
+    def format_unit(value, unit):
+        if value == 1:
+            return f"{int(value)} {unit}"  # Singular (e.g., "1 day")
+        elif value > 1:
+            return f"{int(value)} {unit}s"  # Plural (e.g., "2 days")
+        return None  # Skip if 0
+
+    # Dynamically construct the output
+    parts = filter(None, [
+        format_unit(weeks, "week"),
+        format_unit(days, "day"),
+        format_unit(hours, "hour"),
+        format_unit(minutes, "minute"),
+        format_unit(seconds, "second")
+    ])
+
+    return " ".join(parts) + " left"
 
 
 class Assignment:
@@ -21,19 +50,34 @@ class Assignment:
         self.link = link
     
     def __str__(self):
-        return f"Assignment#{self.id} {self.name} Deadline: {self.deadline.strftime("%a, %d %b %y")}"
+        return f"[#{self.id}] {','.join(self.groups)} - {self.name}. Deadline: {self.deadline.strftime("%a %H:%M, %d %b %y")}"
 
     def get_relative_date(self):
         # TODO: fix
-        return self.deadline.isoformat()
+        return humanize.naturaltime(self.deadline)
     
     def get_embed(self):
-        embed = discord.Embed(title=f"Assignment - {self.name}")
-        embed.add_field(name="ID", value=self.id)
-        embed.add_field(name="Name", value=self.name)
-        embed.add_field(name="Assigned Groups", value=", ".join(self.groups), inline=False)
-        embed.add_field(name="Deadline", value=self.deadline.strftime("%a, %d %b %y"), inline=False)
-        embed.add_field(name="Link to Resource", value=f"{self.link}", inline=False)
+        embed = discord.Embed(
+        title=f"📌 Assignment: {self.name} (#{self.id})",  # ID now looks cleaner
+        color=discord.Color.blue()  # Change color if needed
+        )
+
+        # Assigned Groups (Handles empty case)
+        assigned_groups = ", ".join(self.groups) if self.groups else "*No groups assigned*"
+        embed.add_field(name="📂 **Assigned Groups**", value=assigned_groups, inline=False)
+
+        # Deadline Formatting
+        time_left = timedelta_to_human(self.deadline - datetime.now(tz=UTC))
+        deadline_str = self.deadline.strftime("%A, %d %B %Y at %I:%M %p")  # Example: Monday, 10 March 2025 at 11:59 PM
+        embed.add_field(name="⏳ **Deadline**", value=f"🕒 {deadline_str}\n⚡ **{time_left} remaining!**", inline=False)
+
+        # Optional Link (Only added if present)
+        if self.link:
+            embed.add_field(name="🔗 **Assignment Link**", value=f"[Click here]({self.link})", inline=False)
+
+        # Footer with an Icon
+        embed.set_footer(text="⚡ Stay on top of your assignments!", icon_url="https://cdn-icons-png.flaticon.com/512/1828/1828640.png")
+
         return embed
     
     @classmethod
@@ -49,6 +93,7 @@ class ServerAssignmentManager:
         self.tracked_since = tracked_since if tracked_since else datetime.now()
         self.server_id = server_id
         self.announcer_channel_id = announcer_channel_id
+        self.dashboard_message_id = ""
         self.assignments: dict[str, Assignment] = dict()
         self.past_assignments: dict[str, Assignment] = dict()
         self.groups: set[str] = set()
@@ -217,6 +262,48 @@ class ServerAssignmentManager:
         assignment = self.assignments[assignment_id]
         self.delete_assignment(assignment_id)
         self.past_assignments[assignment_id]=assignment
+    
+    def get_dashboard_message(self):
+        """📚 **Active Assignments**
+
+📝 **Assignment 1**  
+📂 *Subject:* Math  
+⏳ *Deadline:* 2025-03-10 23:59  
+⏲ *Time Left:* 2 days 5 hours  
+
+📝 **Assignment 2**  
+📂 *Subject:* Science  
+⏳ *Deadline:* 2025-03-12 18:00  
+⏲ *Time Left:* 4 days 3 hours  
+
+📝 **Assignment 3**  
+📂 *Subject:* History  
+⏳ *Deadline:* 2025-03-15 12:00  
+⏲ *Time Left:* 7 days 9 hours  
+
+⚠️ **Note:** Time left updates dynamically."""
+        assignments_sorted_by_deadline = sorted([e for e in self.assignments.values()], key=lambda e:e.deadline)
+        dashboard_message = "## 📚 **Active Assignments**"
+        critical_time = False
+        for assignment in assignments_sorted_by_deadline:
+            timeleft = assignment.deadline-datetime.now(tz=UTC)
+            timeleft_str = timedelta_to_human(timeleft)
+            if (timeleft<timedelta(days=100)):
+                timeleft_str = f"⚠️ **{timeleft_str[:-5]} LEFT!** "
+                critical_time = True
+            current_section = [f"📝 **Assignment {assignment.name}**",
+                               f"📂 *Subject:* {humanize.lists.natural_list(assignment.groups)}",
+                               f"⏳ *Deadline:* {assignment.deadline.strftime("%Y-%m-%d %H:%M")}",
+                               f"⏲ *Time Left:* {timeleft_str}"]
+            current_section_str = '\n'.join(current_section)
+            dashboard_message+='\n\n═══════════════════════\n'+current_section_str
+        # res = "# Active Assignments:\n"+'\n'.join(['## '+str(e) for e in assignments_sorted_by_deadline])
+        # res+='\n'+datetime.now().isoformat()
+        # for assignment in assignments_sorted_by_deadline:
+        #     res+=str(assignment)+'\n'
+        if critical_time:
+            dashboard_message+="\n\n\n⚠️ **Note:** Assignments with less than **1 day** left are marked as ⚠️ **URGENT!**"
+        return dashboard_message
 
 
 class AssignmentTracker(commands.Cog):
@@ -224,14 +311,61 @@ class AssignmentTracker(commands.Cog):
         self.bot = bot_
         self.assignments_by_server: dict[str, ServerAssignmentManager] = {}
         self.load()
-        # print(self.assignments_by_server)
     
-    def _init_tasks(self):
+    @commands.Cog.listener('on_ready')
+    async def _init_tasks(self):
         self.autosave_data.start()
+        self.auto_archive_assignments.start()
+        self.refresh_dashboard.start()
+        self.synchronize_dashboard.start()
     
-    @tasks.loop(minutes=1)
+    @tasks.loop(minutes=30)
     async def autosave_data(self):
         self.save()
+    
+    @tasks.loop(minutes=30)
+    async def auto_archive_assignments(self):
+        for manager in self.assignments_by_server.values():
+            archivable_ids = []
+            for assignment in manager.assignments.values():
+                if assignment.deadline.timestamp() < datetime.now().timestamp():
+                    archivable_ids.append(assignment.id)
+            
+            # print("archiving", archivable_ids, "for", manager.server_id)
+            for _id in archivable_ids:
+                manager.archive_assignment(_id)
+        self.save()
+    
+    @tasks.loop(hours=6)
+    async def refresh_dashboard(self):
+        # print("Refreshing dashboard")
+        for manager in self.assignments_by_server.values():
+            channel = self.bot.get_channel(int(manager.announcer_channel_id))
+            if channel is None:
+                continue
+            if manager.dashboard_message_id!="":
+                message = await channel.fetch_message(int(manager.dashboard_message_id))
+                if message is not None:
+                    await message.delete()
+            new_message = await channel.send(manager.get_dashboard_message())
+            manager.dashboard_message_id = new_message.id
+        # self.synchronize_dashboard.start()
+    
+    @tasks.loop(seconds=2)
+    async def synchronize_dashboard(self):
+        # print("Syncing dashboard")
+        for manager in self.assignments_by_server.values():
+            try:
+                if manager.dashboard_message_id=="":
+                    continue
+                channel = self.bot.get_channel(int(manager.announcer_channel_id))
+                if channel is None:
+                    continue
+                message = await channel.fetch_message(int(manager.dashboard_message_id))
+                if message is not None:
+                    await message.edit(content=manager.get_dashboard_message())
+            except discord.errors.NotFound:
+                continue
     
     def load(self):
         try: 
@@ -379,18 +513,18 @@ class AssignmentTracker(commands.Cog):
             return await ctx.send(f"Successfully archived Assignment#{assignment_id}!")
         await ctx.send(f"Failed to archive assignment.")
     
-    @bind_tracker_announcer_channel.after_invoke
-    @create_group.after_invoke
-    @delete_group.after_invoke
-    @subscribe_group.after_invoke
-    @checklist_assignment.after_invoke
-    @unchecklist_assignment.after_invoke
-    @add_assignment.after_invoke
-    @edit_assignment.after_invoke
-    @delete_assignment.after_invoke
-    @archive_assignment.after_invoke
-    async def save_after_action(self, ctx: commands.Context):
-        self.save()
+    # @bind_tracker_announcer_channel.after_invoke
+    # @create_group.after_invoke
+    # @delete_group.after_invoke
+    # @subscribe_group.after_invoke
+    # @checklist_assignment.after_invoke
+    # @unchecklist_assignment.after_invoke
+    # @add_assignment.after_invoke
+    # @edit_assignment.after_invoke
+    # @delete_assignment.after_invoke
+    # @archive_assignment.after_invoke
+    # async def save_after_action(self, ctx: commands.Context):
+    #     self.save()
     
     @bind_tracker_announcer_channel.error
     @create_group.error
