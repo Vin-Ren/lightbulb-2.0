@@ -634,7 +634,7 @@ class AssignmentTracker(commands.Cog):
         for group in groups:
             if manager.unsubscribe(str(ctx.author.id), group):
                 successful.append(group.upper())
-        await ctx.send(f"Successfully unsubscribed from groups: {humanize.lists(successful)}.")
+        await ctx.send(f"Successfully unsubscribed from groups: {humanize.natural_list(successful)}.")
     
     @commands.command(aliases=['listall', 'listallassign'])
     @has_been_setup()
