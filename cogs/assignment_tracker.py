@@ -365,7 +365,7 @@ class ServerAssignmentManager:
         past_assignments = list(self.past_assignments.values())  # Already completed & past deadline
 
         # Split active & completed
-        for assignment in self.get_personal_assignments(include_completed=include_completed):
+        for assignment in self.get_personal_assignments(user_id, include_completed=include_completed):
             if str(assignment.id) in self.user_checklist.get(user_id, set()):
                 completed_assignments.append(assignment)
             else:
@@ -683,6 +683,15 @@ class AssignmentTracker(commands.Cog):
             return await ctx.send(f"Bruh, ok tho. -1 aura")
         await ctx.send(f"What are you trying to do?")
     
+    @commands.slash_command(name='undone', aliases=['markasundone', 'markasincomplete'])
+    @has_been_setup()
+    async def unchecklist_assignment_slash(self, ctx: discord.ApplicationContext, assignment_id: str):
+        """Unchecklist an assignment by its id. Visible only to yourself."""
+        manager = self.get_manager(ctx.guild.id)
+        if manager.unchecklist_assignment(ctx.author.id, assignment_id):
+            return await ctx.respond(f"Bruh, ok tho. -1 aura", ephemeral=True)
+        await ctx.respond(f"What are you trying to do?", ephemeral=True)
+    
     @commands.command(aliases=['getassignment', 'getdetail', 'details'])
     @has_been_setup()
     async def get_assignment(self, ctx: commands.Context, assignment_id: str):
@@ -747,6 +756,7 @@ class AssignmentTracker(commands.Cog):
     @has_been_setup()
     @commands.is_owner()
     async def force_save(self, ctx: commands.Context):
+        "Forcefully execute save immediately."
         self.save()
         return await ctx.send("Successfully saved data.")
     
@@ -776,6 +786,7 @@ class AssignmentTracker(commands.Cog):
     @delete_assignment.error
     @archive_assignment.error
     @toggle_dashboard_message.error
+    @force_save.error
     async def error_handler(self, ctx: commands.Context, error: discord.DiscordException):
         print(error, type(error))
         if isinstance(error, discord.ext.commands.errors.CheckFailure):
