@@ -62,6 +62,19 @@ def format_assignment(assignment, status_emoji, now: datetime = datetime.now(tz=
     return f"{status_emoji} **{assignment.name} (#{assignment.id})**\n{text}\n"
 
 
+def get_toggle_message(feature_name: str, is_enabled: bool):
+    status = "✅ Enabled" if is_enabled else "❌ Disabled"
+    color = discord.Color.green() if is_enabled else discord.Color.red()
+
+    embed = discord.Embed(
+        title=f"🔧 {feature_name} Toggle",
+        description=f"Current Status: **{status}**\nUse the command again to toggle.",
+        color=color
+    )
+
+    return embed
+
+
 class Assignment:
     def __init__(self, _id: str, name: str, groups: str, deadline: datetime, link: str):
         self.id = str(_id)
@@ -123,6 +136,7 @@ class ServerAssignmentManager:
         self.group_assignments: dict[str, set[str]] = dict() # {group: [assigments]}
         self.user_checklist: dict[str, set[str]] = dict() # {user: [assignments]}
         self.last_assignment_id = 0
+        self.disable_dasboard = False
     
     @classmethod
     def from_dict(cls, data: dict):
@@ -136,6 +150,7 @@ class ServerAssignmentManager:
         obj.group_assignments = {group: set(entry) for group, entry in data['group_assignments'].items()}
         obj.user_checklist = {user: set(entry) for user, entry in data['user_checklist'].items()}
         obj.last_assignment_id = data['last_assignment_id']
+        obj.disable_dasboard = data['disable_dasboard']
         return obj
     
     def to_dict(self):
@@ -151,7 +166,8 @@ class ServerAssignmentManager:
             'subscribers': {group: list(users) for group, users in self.subscribers.items()},
             'group_assignments': {group: list(assignment_id) for group, assignment_id in self.group_assignments.items()},
             'user_checklist': {user: list(assignment_id) for user, assignment_id in self.user_checklist.items()},
-            'last_assignment_id': self.last_assignment_id
+            'last_assignment_id': self.last_assignment_id,
+            'disable_dasboard': self.disable_dasboard
         }
     
     def create_group(self, group_name: str):
@@ -409,6 +425,9 @@ class ServerAssignmentManager:
             dashboard_message+="\n\n\n⚠️ **Note:** Assignments with less than **1 day** left are marked as ⚠️ **URGENT!**"
         return dashboard_message
 
+    def toggle_dashboard(self):
+        self.disable_dasboard^=1
+
 
 class AssignmentTracker(commands.Cog):
     def __init__(self, bot_: Bot):
@@ -444,13 +463,18 @@ class AssignmentTracker(commands.Cog):
     async def refresh_dashboard(self):
         # print("Refreshing dashboard")
         for manager in self.assignments_by_server.values():
-            channel = self.bot.get_channel(int(manager.announcer_channel_id))
-            if channel is None:
-                continue
-            if manager.dashboard_message_id!="":
-                message = await channel.fetch_message(int(manager.dashboard_message_id))
-                if message is not None:
-                    await message.delete()
+            try:
+                if manager.disable_dasboard:
+                    continue
+                channel = self.bot.get_channel(int(manager.announcer_channel_id))
+                if channel is None:
+                    continue
+                if manager.dashboard_message_id!="":
+                    message = await channel.fetch_message(int(manager.dashboard_message_id))
+                    if message is not None:
+                        await message.delete()
+            except discord.errors.NotFound:
+                pass
             new_message = await channel.send(manager.get_dashboard_message())
             # new_message = await channel.send(embed=manager.get_assignments_embed())
             manager.dashboard_message_id = new_message.id
@@ -461,6 +485,8 @@ class AssignmentTracker(commands.Cog):
         # print("Syncing dashboard")
         for manager in self.assignments_by_server.values():
             try:
+                if manager.disable_dasboard:
+                    continue
                 if manager.dashboard_message_id=="":
                     continue
                 channel = self.bot.get_channel(int(manager.announcer_channel_id))
@@ -547,6 +573,17 @@ class AssignmentTracker(commands.Cog):
                 successful.append(group.upper())
         await ctx.send(f"Successfully subscribed to groups=[{', '.join(successful)}].")
     
+    @commands.command(aliases=['unsubscribe'])
+    @has_been_setup()
+    async def unsubscribe_group(self, ctx: commands.Context, *, group_names: str):
+        manager = self.get_manager(ctx.guild.id)
+        groups = [e for e in group_names.upper().split(' ') if len(e)>0]
+        successful = []
+        for group in groups:
+            if manager.unsubscribe(str(ctx.author.id), group):
+                successful.append(group.upper())
+        await ctx.send(f"Successfully unsubscribed from groups=[{', '.join(successful)}].")
+    
     @commands.command(aliases=['listall', 'listallassign'])
     @has_been_setup()
     async def list_all_assignments(self, ctx: commands.Context):
@@ -623,6 +660,12 @@ class AssignmentTracker(commands.Cog):
             return await ctx.send(f"Successfully archived Assignment#{assignment_id}!")
         await ctx.send(f"Failed to archive assignment.")
     
+    @commands.command(aliases=['toggle_dashboard'])
+    @has_been_setup()
+    async def toggle_dashboard_message(self, ctx: commands.Context):
+        manager = self.get_manager(ctx.guild.id)
+        manager.toggle_dashboard()
+        await ctx.send(embed=get_toggle_message("Dashboard message", not manager.disable_dasboard))
     
     @commands.command(aliases=['forcesave'])
     @has_been_setup()
@@ -648,6 +691,7 @@ class AssignmentTracker(commands.Cog):
     @create_group.error
     @delete_group.error
     @subscribe_group.error
+    @unsubscribe_group.error
     @checklist_assignment.error
     @unchecklist_assignment.error
     @get_assignment.error
@@ -655,6 +699,7 @@ class AssignmentTracker(commands.Cog):
     @edit_assignment.error
     @delete_assignment.error
     @archive_assignment.error
+    @toggle_dashboard_message.error
     async def error_handler(self, ctx: commands.Context, error: discord.DiscordException):
         print(error, type(error))
         if isinstance(error, discord.ext.commands.errors.CheckFailure):
