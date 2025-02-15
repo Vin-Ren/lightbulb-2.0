@@ -476,6 +476,7 @@ class AssignmentTracker(commands.Cog):
                         await message.delete()
             except discord.errors.NotFound:
                 manager.dashboard_message_id = ""
+                await self.fix_dashboard_message()
             new_message = await channel.send(manager.get_dashboard_message())
             # new_message = await channel.send(embed=manager.get_assignments_embed())
             manager.dashboard_message_id = new_message.id
@@ -499,6 +500,7 @@ class AssignmentTracker(commands.Cog):
                     # await message.edit(embed=manager.get_assignments_embed())
             except discord.errors.NotFound:
                 manager.dashboard_message_id = ""
+                await self.fix_dashboard_message()
     
     async def fix_dashboard_message(self, server_id: str):
         manager = self.get_manager(server_id)
@@ -683,7 +685,7 @@ class AssignmentTracker(commands.Cog):
         manager = self.get_manager(ctx.guild.id)
         await ctx.send(embed=get_toggle_message("Dashboard message", not manager.disable_dasboard))
         manager.toggle_dashboard()
-        self.fix_dashboard_message()
+        await self.fix_dashboard_message()
     
     @commands.command(aliases=['forcesave'])
     @has_been_setup()
