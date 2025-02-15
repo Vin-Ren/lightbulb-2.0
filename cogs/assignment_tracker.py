@@ -3,6 +3,8 @@ from datetime import datetime, timedelta, timezone
 import json
 from typing import Literal
 
+import traceback
+
 import discord
 from discord.ext import commands, tasks
 import humanize
@@ -445,7 +447,7 @@ class AssignmentTracker(commands.Cog):
         self.refresh_dashboard.start()
         self.synchronize_dashboard.start()
     
-    @tasks.loop(minutes=60)
+    @tasks.loop(minutes=15)
     async def autosave_data(self):
         self.save()
     
@@ -463,40 +465,46 @@ class AssignmentTracker(commands.Cog):
                 manager.archive_assignment(_id)
         self.save()
     
-    @tasks.loop(hours=6)
+    @tasks.loop(hours=24)
     async def refresh_dashboard(self):
         # print(f"Refreshing dashboard... {datetime.now().isoformat()}")
-        for manager in self.assignments_by_server.values():
-            try:
-                if manager.disable_dasboard:
-                    continue
-                channel = self.bot.get_channel(int(manager.announcer_channel_id))
-                if channel is None:
-                    continue
-                if manager.dashboard_message_id!="":
-                    message = await channel.fetch_message(int(manager.dashboard_message_id))
-                    if message is not None:
-                        await message.delete()
-            except (discord.errors.NotFound, ValueError):
-                pass
+        try:
+            for manager in self.assignments_by_server.values():
+                try:
+                    if manager.disable_dasboard:
+                        continue
+                    channel = self.bot.get_channel(int(manager.announcer_channel_id))
+                    if channel is None:
+                        continue
+                    if manager.dashboard_message_id!="":
+                        message = await channel.fetch_message(int(manager.dashboard_message_id))
+                        if message is not None:
+                            await message.delete()
+                except (discord.errors.NotFound, ValueError):
+                    pass
+        except RuntimeError:
+            traceback.print_exc()
     
     @tasks.loop(seconds=5)
     async def synchronize_dashboard(self):
         # print(f"Synchronizing dashboard... {datetime.now().isoformat()}")
-        for manager in self.assignments_by_server.values():
-            try:
-                if manager.disable_dasboard:
-                    continue
-                channel = self.bot.get_channel(int(manager.announcer_channel_id))
-                if channel is None:
-                    continue
-                message = await channel.fetch_message(int(manager.dashboard_message_id))
-                if message is not None:
-                    await message.edit(content=manager.get_dashboard_message())
-                    # await message.edit(embed=manager.get_assignments_embed())
-            except (discord.errors.NotFound, ValueError):
-                manager.dashboard_message_id = ""
-                await self.fix_dashboard_message(manager.server_id)
+        try:
+            for manager in self.assignments_by_server.values():
+                try:
+                    if manager.disable_dasboard:
+                        continue
+                    channel = self.bot.get_channel(int(manager.announcer_channel_id))
+                    if channel is None:
+                        continue
+                    message = await channel.fetch_message(int(manager.dashboard_message_id))
+                    if message is not None:
+                        await message.edit(content=manager.get_dashboard_message())
+                        # await message.edit(embed=manager.get_assignments_embed())
+                except (discord.errors.NotFound, ValueError):
+                    manager.dashboard_message_id = ""
+                    await self.fix_dashboard_message(manager.server_id)
+        except RuntimeError:
+            traceback.print_exc()
     
     async def fix_dashboard_message(self, server_id: str):
         manager = self.get_manager(server_id)
@@ -773,7 +781,8 @@ class AssignmentTracker(commands.Cog):
         if isinstance(error, discord.ext.commands.errors.CheckFailure):
             await ctx.send("You have to setup an assignment tracker before doing that!\nrun `~trackerchannel` on a channel you would like to set as a reminder channel.")
         else:
-            raise error
+            await ctx.send(f"Caught error: {str(error)}.\nError type: {type(error)}\nLog:\n```{traceback.format_exc()}```")
+            traceback.print_exc()
 
 
 def setup(bot):
