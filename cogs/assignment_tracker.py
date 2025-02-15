@@ -475,8 +475,7 @@ class AssignmentTracker(commands.Cog):
                     if message is not None:
                         await message.delete()
             except (discord.errors.NotFound, ValueError):
-                manager.dashboard_message_id = ""
-                await self.fix_dashboard_message(manager.server_id)
+                pass
             new_message = await channel.send(manager.get_dashboard_message())
             # new_message = await channel.send(embed=manager.get_assignments_embed())
             manager.dashboard_message_id = new_message.id
@@ -592,7 +591,7 @@ class AssignmentTracker(commands.Cog):
         for group in groups:
             if manager.subscribe(str(ctx.author.id), group):
                 successful.append(group.upper())
-        await ctx.send(f"Successfully subscribed to groups: {humanize.natural_list(successful)}].")
+        await ctx.send(f"Successfully subscribed to groups: {humanize.natural_list(successful)}.")
     
     @commands.command(aliases=['unsubscribe'])
     @has_been_setup()
@@ -603,7 +602,7 @@ class AssignmentTracker(commands.Cog):
         for group in groups:
             if manager.unsubscribe(str(ctx.author.id), group):
                 successful.append(group.upper())
-        await ctx.send(f"Successfully unsubscribed from groups=[{humanize.lists(successful)}].")
+        await ctx.send(f"Successfully unsubscribed from groups: {humanize.lists(successful)}.")
     
     @commands.command(aliases=['listall', 'listallassign'])
     @has_been_setup()
@@ -625,6 +624,7 @@ class AssignmentTracker(commands.Cog):
     
     @commands.slash_command(name='listmine')
     @discord.option("mode", choices=["Todo", "All"], default="Todo", description="View only todo or view all of your assignments", required=False)
+    @has_been_setup()
     async def list_personal_assignments_slash(self, ctx: discord.ApplicationContext, mode: str = "Todo"):
         """Lists your assignments, visible only to yourself."""
         manager = self.get_manager(ctx.guild.id)
@@ -640,6 +640,15 @@ class AssignmentTracker(commands.Cog):
         if manager.checklist_assignment(ctx.author.id, assignment_id):
             return await ctx.send(f"Nicely done <@{ctx.author.id}>! :fire: :fire: :fire:")
         await ctx.send(f"No-uh, Can't do that.")
+    
+    @commands.slash_command(aliases=['markasdone'])
+    @has_been_setup()
+    async def checklist_assignment(self, ctx: discord.ApplicationContext, assignment_id: str):
+        """Marks an assignment as done."""
+        manager = self.get_manager(ctx.guild.id)
+        if manager.checklist_assignment(ctx.author.id, assignment_id):
+            return await ctx.respond(f"Nicely done <@{ctx.author.id}>! :fire: :fire: :fire:", ephemeral=True)
+        await ctx.respond(f"No-uh, Can't do that.", ephemeral=True)
     
     @commands.command(aliases=['incompleted', 'incomplete', 'undone'])
     @has_been_setup()
