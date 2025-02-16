@@ -798,10 +798,15 @@ class AssignmentTracker(commands.Cog):
     @archive_assignment.error
     @toggle_dashboard_message.error
     @force_save.error
+    @auto_archive_assignments.error
+    @refresh_dashboard.error
+    @synchronize_dashboard.error
     async def error_handler(self, ctx: commands.Context, error: discord.DiscordException):
         print(error, type(error))
         if isinstance(error, discord.ext.commands.errors.CheckFailure):
             await ctx.send("You have to setup an assignment tracker before doing that!\nrun `~trackerchannel` on a channel you would like to set as a reminder channel.")
+        if isinstance(error, discord.errors.DiscordServerError):
+            await ctx.send(f"⚠️ Discord API is having issues. Please try again later!\n| **Details** \n{type(error)}: {str(error)}|")
         else:
             await ctx.send(f"Caught error: {str(error)}.\nError type: {type(error)}\nLog:\n```{traceback.format_exc()}```")
             traceback.print_exc()
