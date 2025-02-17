@@ -312,7 +312,7 @@ class ServerAssignmentManager:
 
         # Categorize assignments
         active_assignments = list(self.assignments.values())  # Assignments still due
-        past_assignments = list(self.past_assignments.values())  # Assignments past deadline
+        past_assignments = list(self.past_assignments.values())[:3]  # Assignments past deadline
 
         # Determine urgency color (based on most urgent active assignment)
         most_urgent_time = timedelta.max if active_assignments else timedelta(days=1000)
@@ -344,7 +344,7 @@ class ServerAssignmentManager:
 
         # Add Past Assignments
         if past_assignments:
-            embed.add_field(name="🕒 **Past Assignments**\n━━━━━━━━━━━━━━━━", value="These assignments were not submitted on time:", inline=False)
+            embed.add_field(name="🕒 **Past Assignments**\n━━━━━━━━━━━━━━━━", value="These assignments has already been closed (max 5 shown):", inline=False)
             for assignment in past_assignments:
                 embed.add_field(name=f"🕒 {assignment.name} (#{assignment.id})", 
                                 value=format_assignment(assignment, "past", now=now, completed=False), inline=False)
@@ -362,7 +362,7 @@ class ServerAssignmentManager:
         # Assignments categorization
         active_assignments = []
         completed_assignments = []
-        past_assignments = list(self.past_assignments.values())  # Already completed & past deadline
+        past_assignments = list(self.past_assignments.values())[:5]  # Already completed & past deadline
 
         # Split active & completed
         for assignment in self.get_personal_assignments(user_id, include_completed=include_completed):
@@ -387,7 +387,7 @@ class ServerAssignmentManager:
         # Create embed
         embed = discord.Embed(
             title="📚 Assignments Overview",
-            description="Here's your assignment breakdown! ⚡",
+            description=f"Hi <@{user_id}> Here's your assignment breakdown! ⚡",
             color=embed_color
         )
 
@@ -408,8 +408,8 @@ class ServerAssignmentManager:
                 embed.add_field(name="\u200b", value="━━━━━━━━━━━━━━━━", inline=False)  # Separator
         
         # Add Past Assignments
-        if past_assignments:
-            embed.add_field(name="🕒 **Past Assignments**\n━━━━━━━━━━━━━━━━", value="These assignments were not submitted on time:", inline=False)
+        if include_completed and past_assignments:
+            embed.add_field(name="🕒 **Past Assignments**\n━━━━━━━━━━━━━━━━", value="These assignments has been closed (max 5 shown):", inline=False)
             for assignment in past_assignments:
                 embed.add_field(name=f"🕒 {assignment.name} (#{assignment.id})", 
                                 value=format_assignment(assignment, "past", now=now, completed=True), inline=False)
