@@ -565,7 +565,6 @@ class AssignmentTracker(commands.Cog):
         return commands.check(predicate)
     
     @commands.command(aliases=['trackerchannel', 'setup'])
-    @commands.has_permissions(administrator=True)
     async def bind_tracker_announcer_channel(self, ctx: commands.Context, channel: discord.TextChannel = None):
         """Setup and sets a tracker channel for dashboard and reminders."""
         if channel==None:
@@ -587,7 +586,6 @@ class AssignmentTracker(commands.Cog):
     
     @commands.command(aliases=['creategroup'])
     @has_been_setup()
-    @commands.has_permissions(administrator=True)
     async def create_group(self, ctx: commands.Context, group_name: str):
         """Creates a group"""
         if ',' in group_name:
@@ -599,7 +597,6 @@ class AssignmentTracker(commands.Cog):
     
     @commands.command(aliases=['deletegroup'])
     @has_been_setup()
-    @commands.has_permissions(administrator=True)
     async def delete_group(self, ctx: commands.Context, group_name: str):
         """Deletes a group, this action is irreversible."""
         manager = self.get_manager(ctx.guild.id)
@@ -718,7 +715,6 @@ class AssignmentTracker(commands.Cog):
     
     @commands.command(aliases=['createassignment', 'add', 'create'])
     @has_been_setup()
-    @commands.has_permissions(administrator=True)
     async def add_assignment(self, ctx: commands.Context, name: str, groups: str = "", deadline: str = "", link: str = ""):
         """Creates an assignment with given attributes. 
         Every attribute is seperated by space, every group is seperated by commas, 
@@ -731,7 +727,6 @@ class AssignmentTracker(commands.Cog):
     
     @commands.command(aliases=['edit'])
     @has_been_setup()
-    @commands.has_permissions(administrator=True)
     async def edit_assignment(self, ctx: commands.Context, assignment_id: str, field: Literal['name', 'deadline', 'groups', 'link'], value: str):
         """Edits an assignment's fields' value. Editable fields: name, deadline, groups, and link."""
         manager = self.get_manager(ctx.guild.id)
@@ -742,7 +737,6 @@ class AssignmentTracker(commands.Cog):
     
     @commands.command(aliases=['deleteassignment', 'delete'])
     @has_been_setup()
-    @commands.has_permissions(administrator=True)
     async def delete_assignment(self, ctx: commands.Context, assignment_id: str):
         """Deletes an assignment. This action cannot be undone."""
         manager = self.get_manager(ctx.guild.id)
@@ -753,7 +747,6 @@ class AssignmentTracker(commands.Cog):
     
     @commands.command(aliases=['archiveassignment', 'archive'])
     @has_been_setup()
-    @commands.has_permissions(administrator=True)
     async def archive_assignment(self, ctx: commands.Context, assignment_id: str):
         """Archiving an assignment manually. Assignments gets archived automatically after its deadline."""
         manager = self.get_manager(ctx.guild.id)
@@ -763,7 +756,6 @@ class AssignmentTracker(commands.Cog):
     
     @commands.command(aliases=['toggledashboard'])
     @has_been_setup()
-    @commands.has_permissions(administrator=True)
     async def toggle_dashboard_message(self, ctx: commands.Context):
         """Toggles dashboard message on and off. This is off by default."""
         manager = self.get_manager(ctx.guild.id)
@@ -813,10 +805,8 @@ class AssignmentTracker(commands.Cog):
         print(error, type(error))
         if isinstance(error, discord.ext.commands.errors.CheckFailure):
             await ctx.send("You have to setup an assignment tracker before doing that!\nrun `~trackerchannel` on a channel you would like to set as a reminder channel.")
-        elif isinstance(error, discord.errors.DiscordServerError):
+        if isinstance(error, discord.errors.DiscordServerError):
             await ctx.send(f"⚠️ Discord API is having issues. Please try again later!\n| **Details** \n{type(error)}: {str(error)}|")
-        elif isinstance(error, commands.MissingPermissions):
-            await ctx.send("❌ You don't have permission to use this command!")
         else:
             await ctx.send(f"Caught error: {str(error)}.\nError type: {type(error)}\nLog:\n```{traceback.format_exc()}```")
             traceback.print_exc()
