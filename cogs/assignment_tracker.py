@@ -223,6 +223,9 @@ class ServerAssignmentManager:
         self.subscriptions[user_id].remove(group_name)
         self.subscribers[group_name].remove(user_id)
         return True
+    
+    def get_assignment(self, assignment_id: str):
+        return self.assignments[str(assignment_id)]
 
     def get_all_assignments(self):
         return sorted([assignment for assignment in self.assignments.values()], key=lambda e: e.deadline)
@@ -673,7 +676,8 @@ class AssignmentTracker(commands.Cog):
         """Marks an assignment as done."""
         manager = self.get_manager(ctx.guild.id)
         if manager.checklist_assignment(ctx.author.id, assignment_id):
-            return await ctx.send(f"Nicely done <@{ctx.author.id}>! :fire: :fire: :fire:")
+            assignment = manager.get_assignment(assignment_id)
+            return await ctx.send(f"Nicely done <@{ctx.author.id}> for completing {assignment.name}! :fire: :fire: :fire:")
         await ctx.send(f"No-uh, Can't do that.")
     
     @commands.slash_command(name='markasdone')
@@ -682,7 +686,8 @@ class AssignmentTracker(commands.Cog):
         """Marks an assignment as done. Visible only to you."""
         manager = self.get_manager(ctx.guild.id)
         if manager.checklist_assignment(ctx.author.id, assignment_id):
-            return await ctx.respond(f"Nicely done <@{ctx.author.id}>! :fire: :fire: :fire:", ephemeral=True)
+            assignment = manager.get_assignment(assignment_id)
+            return await ctx.respond(f"Nicely done <@{ctx.author.id}> for completing {assignment.name}! :fire: :fire: :fire:", ephemeral=True)
         await ctx.respond(f"No-uh, Can't do that.", ephemeral=True)
     
     @commands.command(aliases=['incompleted', 'incomplete', 'undone'])
