@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
 import json
+import random
 from typing import Literal
 
 import traceback
@@ -230,6 +231,9 @@ class ServerAssignmentManager:
     def get_all_assignments(self):
         return sorted([assignment for assignment in self.assignments.values()], key=lambda e: e.deadline)
     
+    def get_past_assignments(self):
+        return sorted([assignment for assignment in self.past_assignments.values()], key=lambda e: e.deadline, reverse=True)
+    
     def get_personal_assignments(self, user_id: str, include_completed: bool = True):
         assignment_ids = set()
         for group in self.subscriptions.get(user_id,[]):
@@ -314,8 +318,8 @@ class ServerAssignmentManager:
         now = datetime.now(tz=timezone.utc)
 
         # Categorize assignments
-        active_assignments = list(self.assignments.values())  # Assignments still due
-        past_assignments = list(self.past_assignments.values())[:3]  # Assignments past deadline
+        active_assignments = self.get_all_assignments()  # Assignments still due
+        past_assignments = self.get_past_assignments()[:3]  # Assignments past deadline
 
         # Determine urgency color (based on most urgent active assignment)
         most_urgent_time = timedelta.max if active_assignments else timedelta(days=1000)
@@ -347,7 +351,7 @@ class ServerAssignmentManager:
 
         # Add Past Assignments
         if past_assignments:
-            embed.add_field(name="🕒 **Past Assignments**\n━━━━━━━━━━━━━━━━", value="These assignments has already been closed (max 5 shown):", inline=False)
+            embed.add_field(name="🕒 **Past Assignments**\n━━━━━━━━━━━━━━━━", value="These assignments has already been closed (max 3 shown):", inline=False)
             for assignment in past_assignments:
                 embed.add_field(name=f"🕒 {assignment.name} (#{assignment.id})", 
                                 value=format_assignment(assignment, "past", now=now, completed=False), inline=False)
@@ -365,7 +369,7 @@ class ServerAssignmentManager:
         # Assignments categorization
         active_assignments = []
         completed_assignments = []
-        past_assignments = list(self.past_assignments.values())[:5]  # Already completed & past deadline
+        past_assignments = self.get_past_assignments()[:5]  # Already completed & past deadline
 
         # Split active & completed
         for assignment in self.get_personal_assignments(user_id, include_completed=include_completed):
@@ -544,9 +548,7 @@ class AssignmentTracker(commands.Cog):
         try: 
             with open(SAVE_FILENAME, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                # print(f"{data=}")
                 self.assignments_by_server = {server_id: ServerAssignmentManager.from_dict(entry) for server_id, entry in data.items()}
-                assert(list(self.assignments_by_server.values())[0].groups.__contains__('ALIN'))
         except:
             pass
     
@@ -560,6 +562,23 @@ class AssignmentTracker(commands.Cog):
     
     def get_manager(self, guild_id: str):
         return self.assignments_by_server[str(guild_id)]
+    
+    
+    @staticmethod
+    def get_random_appreciation_message(ctx: commands.Context | discord.ApplicationContext, assignment: Assignment):
+        messages = [
+            f"Great job <@{ctx.author.id}> on completing {assignment.name}! 🎉🔥",
+            f"Well done, <@{ctx.author.id}>! You crushed {assignment.name}! 🚀🔥",
+            f"Awesome work <@{ctx.author.id}> on finishing {assignment.name}! 💪🔥",
+            f"Kudos to you, <@{ctx.author.id}>! {assignment.name} is done! 🎯🔥",
+            f"Fantastic effort, <@{ctx.author.id}>! {assignment.name} is in the books! 📚🔥",
+            f"You're on fire, <@{ctx.author.id}>! {assignment.name} is complete! 🔥🔥🔥",
+            f"Another one down! Well played, <@{ctx.author.id}> on finishing {assignment.name}! 🎮🔥",
+            f"Boom! <@{ctx.author.id}> just aced {assignment.name}! 💥🔥",
+            f"Mission accomplished, <@{ctx.author.id}>! {assignment.name} is history! ✅🔥",
+            f"Hats off to you, <@{ctx.author.id}>! {assignment.name} is wrapped up! 🎩🔥"
+        ]
+        return random.choice(messages)
     
     @staticmethod
     def has_been_setup():
@@ -677,7 +696,7 @@ class AssignmentTracker(commands.Cog):
         manager = self.get_manager(ctx.guild.id)
         if manager.checklist_assignment(ctx.author.id, assignment_id):
             assignment = manager.get_assignment(assignment_id)
-            return await ctx.send(f"Nicely done <@{ctx.author.id}> for completing {assignment.name}! :fire: :fire: :fire:")
+            return await ctx.send(self.get_random_appreciation_message(ctx, assignment))
         await ctx.send(f"No-uh, Can't do that.")
     
     @commands.slash_command(name='markasdone')
@@ -687,7 +706,7 @@ class AssignmentTracker(commands.Cog):
         manager = self.get_manager(ctx.guild.id)
         if manager.checklist_assignment(ctx.author.id, assignment_id):
             assignment = manager.get_assignment(assignment_id)
-            return await ctx.respond(f"Nicely done <@{ctx.author.id}> for completing {assignment.name}! :fire: :fire: :fire:", ephemeral=True)
+            return await ctx.respond(self.get_random_appreciation_message(ctx, assignment), ephemeral=True)
         await ctx.respond(f"No-uh, Can't do that.", ephemeral=True)
     
     @commands.command(aliases=['incompleted', 'incomplete', 'undone'])
