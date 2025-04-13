@@ -292,6 +292,7 @@ class ServerAssignmentManager:
                 self.group_assignments[group].remove(assignment_id)
             for group in groups:
                 self.group_assignments[group].add(assignment.id)
+            self.assignments[assignment_id].groups = groups
         elif field_name == 'link':
             if not value.startswith('http'):
                 value = 'https://'+value
