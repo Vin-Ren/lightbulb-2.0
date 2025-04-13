@@ -264,8 +264,7 @@ class ServerAssignmentManager:
     
     def create_assignment(self, name: str, groups: str, deadline: str, link: str):
         groups = groups.upper().split(',')
-        self.last_assignment_id+=1
-        assignment = Assignment(_id=self.last_assignment_id, name=name, groups=groups, deadline=datetime.strptime(deadline, DATETIME_FORMAT), link=link)
+        assignment = Assignment(_id=self.last_assignment_id+1, name=name, groups=groups, deadline=datetime.strptime(deadline, DATETIME_FORMAT), link=link)
         # assume this assignment's deadline is within this year
         assignment.deadline = assignment.deadline.replace(year=datetime.now().year) 
         if len(assignment.link) and not assignment.link.startswith('http'):
@@ -273,6 +272,7 @@ class ServerAssignmentManager:
         for group in groups:
             self.group_assignments[group].add(assignment.id)
         self.assignments[assignment.id] = assignment
+        self.last_assignment_id+=1
         return assignment
         # self.assignments.sort(key=lambda assignment: assignment.deadline) # Sorts by deadline
     
