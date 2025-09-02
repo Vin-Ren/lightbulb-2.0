@@ -4,7 +4,7 @@ import yt_dlp
 import discord
 
 # Suppress noise about console usage from errors
-yt_dlp.utils.bug_reports_message = lambda: ""
+yt_dlp.utils.bug_reports_message = lambda *a, **b: ""
 
 
 ytdl_format_options = {
