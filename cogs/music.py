@@ -328,16 +328,18 @@ class Music(commands.Cog):
     @commands.command(aliases=['play', 'p'])
     async def stream(self, ctx: commands.Context, *, url: str):
         """Streams audio from a url or query"""
-
+        start_time = time.time()
         msg = await ctx.send(f"Processing request...")
         
         async with ctx.typing():
             player = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
             ctx.voice_client.play(player, after=lambda e: print(f"Player error: {e}") if e else None)
         
+        duration = time.time() - start_time
+        
         embed = player.create_discord_embed(color=ctx.author.color)
         
-        await msg.edit(content="", embeds=[embed])
+        await msg.edit(content=f"Request fulfilled in {duration:.2f}s", embeds=[embed])
         await asyncio.sleep(player.data["duration"])
         await msg.edit(content="Finished playing.", embeds=[embed])
     
@@ -347,14 +349,16 @@ class Music(commands.Cog):
     async def slash_stream(self, ctx: discord.ApplicationContext, url: str, ephemeral: str):
         """Streams audio from a url or query"""
         ephemeral_ = (ephemeral == 'Ephemeral')
+        start_time = time.time()
         response = await ctx.respond(content="Processing request...", ephemeral=ephemeral_)
         
         player = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
         ctx.voice_client.play(player, after=lambda e: print(f"Player error: {e}") if e else None)
         
+        duration = time.time() - start_time
         embed = player.create_discord_embed(color=ctx.author.color)
         
-        await response.edit_original_response(content="", embeds=[embed])
+        await response.edit_original_response(content=f"Request fulfilled in {duration:.2f}s", embeds=[embed])
         await asyncio.sleep(player.data["duration"])
         await response.edit_original_response(content="Finished playing.", embeds=[embed])
 
