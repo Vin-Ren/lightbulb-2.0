@@ -3,3 +3,4 @@ py-cord[voice]
 yt-dlp
 python-dotenv
 humanize
+bgutil-ytdlp-pot-provider

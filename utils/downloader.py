@@ -1,7 +1,7 @@
 import asyncio
+import os
 import yt_dlp
 import discord
-import json
 
 # Suppress noise about console usage from errors
 yt_dlp.utils.bug_reports_message = lambda: ""
@@ -21,6 +21,7 @@ ytdl_format_options = {
     "source_address": (
         "0.0.0.0"
     ),  # Bind to ipv4 since ipv6 addresses cause issues at certain times
+    "extractor_args": {"youtubepot-bgutilhttp": {"base_url": os.getenv("BGUTIL_BASE_URL", "http://localhost:8080")}},
 }
 
 ffmpeg_options = {
