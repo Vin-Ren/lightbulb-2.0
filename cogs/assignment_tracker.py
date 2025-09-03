@@ -1,10 +1,12 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
 import json
+import os
 import random
 from typing import Literal
 
 import traceback
+import uuid
 
 import discord
 from discord.ext import commands, tasks
@@ -15,7 +17,13 @@ from bot import Bot
 
 
 SAVE_FILENAME = "assignments.json"
-DATETIME_FORMAT = "%d-%mT%H:%M%z"
+DATETIME_FORMATS = [
+    "%d-%mT%H:%M%z",
+    "%A, %d %B %Y, %I:%M %p",   # Friday, 19 September 2025, 5:00 PM
+    "%d %B %Y %H:%M",           # 19 September 2025 17:00
+    "%Y-%m-%d %H:%M:%S",        # 2025-09-19 17:00:00
+    "%d/%m/%Y %H:%M",           # 19/09/2025 17:00
+]
 
 
 def timedelta_to_human(td: timedelta) -> str:
@@ -76,6 +84,17 @@ def get_toggle_message(feature_name: str, is_enabled: bool):
     )
 
     return embed
+
+def parse_datetime_with_formats(date_str: str):
+    for fmt in DATETIME_FORMATS:
+        try:
+            dt = datetime.strptime(date_str, fmt)
+            # Assume the assignment's deadline is within this year and set timezone to UTC+7
+            return dt.replace(year=datetime.now().year, tzinfo=timezone(timedelta(hours=7)))
+        except ValueError:
+            continue
+    
+    raise ValueError(f"Time data '{date_str}' does not match any known format.")
 
 
 class Assignment:
@@ -264,9 +283,7 @@ class ServerAssignmentManager:
     
     def create_assignment(self, name: str, groups: str, deadline: str, link: str):
         groups = groups.upper().split(',')
-        assignment = Assignment(_id=self.last_assignment_id+1, name=name, groups=groups, deadline=datetime.strptime(deadline, DATETIME_FORMAT), link=link)
-        # assume this assignment's deadline is within this year
-        assignment.deadline = assignment.deadline.replace(year=datetime.now().year) 
+        assignment = Assignment(_id=self.last_assignment_id+1, name=name, groups=groups, deadline=parse_datetime_with_formats(deadline), link=link)
         if len(assignment.link) and not assignment.link.startswith('http'):
             assignment = 'https://'+assignment
         for group in groups:
@@ -283,8 +300,7 @@ class ServerAssignmentManager:
         if field_name == 'name':
             assignment.name = value
         elif field_name == 'deadline':
-            newDeadline = datetime.strptime(value, DATETIME_FORMAT)
-            newDeadline = newDeadline.replace(year=datetime.now().year)
+            newDeadline = parse_datetime_with_formats(value)
             assignment.deadline = newDeadline
         elif field_name == 'groups':
             groups = value.upper().split(',')
@@ -589,7 +605,7 @@ class AssignmentTracker(commands.Cog):
     
     @commands.command(aliases=['trackerchannel', 'setup'])
     async def bind_tracker_announcer_channel(self, ctx: commands.Context, channel: discord.TextChannel = None):
-        """Setup and sets a tracker channel for dashboard and reminders."""
+        """Setup and sets a tracker channel for dashboard and reminders. Tag the server announcer channel with the format <#CHANNEL_ID>."""
         if channel==None:
             channel = ctx.channel
         if str(ctx.guild.id) not in self.assignments_by_server:
@@ -741,9 +757,9 @@ class AssignmentTracker(commands.Cog):
     @commands.command(aliases=['createassignment', 'add', 'create'])
     @has_been_setup()
     async def add_assignment(self, ctx: commands.Context, name: str, groups: str = "", deadline: str = "", link: str = ""):
-        """Creates an assignment with given attributes. 
+        f"""Creates an assignment with given attributes. 
         Every attribute is seperated by space, every group is seperated by commas, 
-        and the deadline format is: "%d-%mT%H:%M%z". 
+        and the deadline format is: {DATETIME_FORMATS}. 
         Example of a correctly formatted deadline for 17.00 at 20th february is '20-02T17:00+0700'.
         """
         manager = self.get_manager(ctx.guild.id)
@@ -758,7 +774,7 @@ class AssignmentTracker(commands.Cog):
         if manager.edit_assignment(assignment_id, field, value):
             await ctx.send(f"Successfully edited Assignment#{assignment_id}!\n")
             return await ctx.send(embed=manager.assignments[assignment_id].get_embed())
-        await ctx.send(f"Failed to delete assignment")
+        await ctx.send(f"Failed to edit assignment")
     
     @commands.command(aliases=['deleteassignment', 'delete'])
     @has_been_setup()
@@ -828,13 +844,40 @@ class AssignmentTracker(commands.Cog):
     @synchronize_dashboard.error
     async def error_handler(self, ctx: commands.Context, error: discord.DiscordException):
         print(error, type(error))
-        if isinstance(error, discord.ext.commands.errors.CheckFailure):
-            await ctx.send("You have to setup an assignment tracker before doing that!\nrun `~trackerchannel` on a channel you would like to set as a reminder channel.")
+        os.makedirs("tracebacks", exist_ok=True)
+
+        # Handle specific errors
+        if isinstance(error, commands.CheckFailure):
+            await ctx.send(
+                "You have to setup an assignment tracker before doing that!\n"
+                "Run `~trackerchannel` on a channel you would like to set as a reminder channel."
+            )
+            return
+
         if isinstance(error, discord.errors.DiscordServerError):
-            await ctx.send(f"⚠️ Discord API is having issues. Please try again later!\n| **Details** \n{type(error)}: {str(error)}|")
-        else:
-            await ctx.send(f"Caught error: {str(error)}.\nError type: {type(error)}\nLog:\n```{traceback.format_exc()}```")
-            traceback.print_exc()
+            await ctx.send(
+                f"⚠️ Discord API is having issues. Please try again later!\n"
+                f"| **Details** \n{type(error)}: {str(error)}|"[:1900]
+            )
+            return
+
+        # Handle all other errors
+        error_id = str(uuid.uuid4())
+        log_path = os.path.join("tracebacks", f"{error_id}.txt")
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write(f"Error ID: {error_id}\n")
+            f.write(f"Command: {ctx.command}\n")
+            f.write(f"Author: {ctx.author} ({ctx.author.id})\n")
+            f.write(f"Channel: {ctx.channel} ({ctx.channel.id})\n")
+            f.write(f"Guild: {ctx.guild} ({ctx.guild.id if ctx.guild else 'DM'})\n\n")
+            f.write("Traceback:\n")
+            f.write("".join(traceback.format_exception(type(error), error, error.__traceback__)))
+
+        await ctx.send(
+            f"⚠️ An unexpected error occurred!\n"
+            f"Type: `{type(error).__name__}`\n"
+            f"LogID: `{error_id}`"[:1900]
+        )
 
 
 def setup(bot):
